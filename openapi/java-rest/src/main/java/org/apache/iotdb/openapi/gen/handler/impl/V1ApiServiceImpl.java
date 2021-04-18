@@ -22,61 +22,17 @@ package org.apache.iotdb.openapi.gen.handler.impl;
 import org.apache.iotdb.openapi.gen.handler.*;
 import org.apache.iotdb.openapi.gen.handler.NotFoundException;
 import org.apache.iotdb.openapi.gen.model.*;
-import org.apache.iotdb.openapi.gen.model.GroupByFillPlan;
 
 import javax.validation.constraints.*;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.SecurityContext;
-
-import java.util.List;
 
 @javax.annotation.Generated(
     value = "org.openapitools.codegen.languages.JavaJerseyServerCodegen",
     date = "2021-01-13T21:45:03.765+08:00[Asia/Shanghai]")
 public class V1ApiServiceImpl extends V1ApiService {
   @Override
-  public Response postV1GrafanaData(
-      GroupByFillPlan groupByFillPlan, SecurityContext securityContext) throws NotFoundException {
-    // do some magic!
-    return Response.ok().entity(new ApiResponseMessage(ApiResponseMessage.OK, "magic!")).build();
-  }
-
-  @Override
-  public Response postV1GrafanaDataSimplejson(
-      GroupByFillPlan groupByFillPlan, SecurityContext securityContext) throws NotFoundException {
-    // do some magic!
-    return Response.ok().entity(new ApiResponseMessage(ApiResponseMessage.OK, "magic!")).build();
-  }
-
-  @Override
-  public Response postV1GrafanaNode(List<String> requestBody, SecurityContext securityContext)
-      throws NotFoundException {
-    // do some magic!
-    return Response.ok().entity(new ApiResponseMessage(ApiResponseMessage.OK, "magic!")).build();
-  }
-
-  @Override
   public Response postV1NonQuery(ReadData readData, SecurityContext securityContext)
-      throws NotFoundException {
-    return null;
-  }
-
-  @Override
-  public Response postV1PrometheusQuery(
-      String userAgent,
-      String xPrometheusRemoteReadVersion,
-      byte[] body,
-      SecurityContext securityContext)
-      throws NotFoundException {
-    return null;
-  }
-
-  @Override
-  public Response postV1PrometheusReceive(
-      String userAgent,
-      String xPrometheusRemoteWriteVersion,
-      byte[] body,
-      SecurityContext securityContext)
       throws NotFoundException {
     return null;
   }
