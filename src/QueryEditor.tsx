@@ -2,11 +2,11 @@ import React, { PureComponent } from 'react';
 import { toOption } from './functions';
 import { QueryEditorProps, SelectableValue } from '@grafana/data';
 import { DataSource } from './DataSource';
-import { Fill, GroupBy, MyDataSourceOptions, MyQuery } from './types';
-
-import { QueryInlineField } from './componments/Form';
+import { Fill, GroupBy, LimitAll, MyDataSourceOptions, MyQuery } from './types';
+import { QueryField, QueryInlineField } from './componments/Form';
 import { TimeSeries } from './componments/TimeSeries';
 import { GroupByLabel } from './componments/GroupBy';
+import { SLimitLabel } from './componments/SLimitLabel';
 import { Aggregation } from './componments/Aggregation';
 import { FillClause } from './componments/Fill';
 import { Segment } from '@grafana/ui';
@@ -22,6 +22,7 @@ interface State {
   isAggregated: boolean;
   aggregated: string;
   shouldAdd: boolean;
+  limitAll: LimitAll;
 }
 
 const selectElement = [
@@ -36,20 +37,18 @@ const selectElement = [
   'LAST_VALUE',
 ];
 
-const selectPoint = ['sampling interval', 'sampling points'];
+const selectPoint = ['sampling interval'];
 const selectRaw = ['Raw', 'Aggregation'];
-
 type Props = QueryEditorProps<DataSource, MyQuery, MyDataSourceOptions>;
 
 export class QueryEditor extends PureComponent<Props, State> {
   state: State = {
     timeSeries: [],
     options: [[toOption('')]],
-    aggregation: selectElement[4],
+    aggregation: '',
     groupBy: {
       samplingInterval: '',
       step: '',
-      samplingPoints: 0,
     },
     fillClauses: [],
     isPoint: true,
@@ -57,6 +56,10 @@ export class QueryEditor extends PureComponent<Props, State> {
     isAggregated: false,
     aggregated: selectRaw[0],
     shouldAdd: true,
+    limitAll: {
+      slimit: '',
+      limit: '',
+    },
   };
 
   onTimeSeriesChange = (t: string[], options: Array<Array<SelectableValue<string>>>, isRemove: boolean) => {
@@ -64,18 +67,18 @@ export class QueryEditor extends PureComponent<Props, State> {
     if (t.length === options.length) {
       this.props.datasource
         .metricFindQuery(['root', ...t])
-        .then(a => {
-          const b = a.map(a => a.text).map(toOption);
-          onChange({ ...query, timeSeries: t });
+        .then((a) => {
+          const b = a.map((a) => a.text).map(toOption);
+          onChange({ ...query, paths: t });
           if (isRemove) {
             this.setState({ timeSeries: t, options: [...options, b], shouldAdd: true });
           } else {
             this.setState({ timeSeries: t, options: [...options, b] });
           }
         })
-        .catch(e => {
+        .catch((e) => {
           if (e === 'measurement') {
-            onChange({ ...query, timeSeries: t });
+            onChange({ ...query, paths: t });
             this.setState({ timeSeries: t, shouldAdd: false });
           } else {
             this.setState({ shouldAdd: false });
@@ -83,10 +86,20 @@ export class QueryEditor extends PureComponent<Props, State> {
         });
     } else {
       this.setState({ timeSeries: t });
-      onChange({ ...query, timeSeries: t });
+      onChange({ ...query, paths: t });
     }
   };
-
+  // onIntervalChange = (e: React.SyntheticEvent<HTMLInputElement>) => {
+  //   const { onChange, query } = this.props;
+  //   const interval = e.currentTarget.value;
+  //   onChange({ ...query, interval: interval });
+  //   this.setState({ interval: interval });
+  // };
+  onSLimitChange = (s: LimitAll) => {
+    const { onChange, query } = this.props;
+    onChange({ ...query, limitAll: s });
+    this.setState({ limitAll: s });
+  };
   onAggregationsChange = (a: string) => {
     const { onChange, query } = this.props;
     this.setState({ aggregation: a });
@@ -107,17 +120,29 @@ export class QueryEditor extends PureComponent<Props, State> {
 
   componentDidMount() {
     if (this.state.options.length === 1 && this.state.options[0][0].value === '') {
-      this.props.datasource.metricFindQuery(['root']).then(a => {
-        const b = a.map(a => a.text).map(toOption);
+      this.props.datasource.metricFindQuery(['root']).then((a) => {
+        const b = a.map((a) => a.text).map(toOption);
         this.setState({ options: [b] });
       });
     }
   }
-
   render() {
     return (
       <>
         <div className="gf-form">
+          <Segment
+            onChange={({ value: value = '' }) => {
+              if (value === selectRaw[0]) {
+                this.props.query.aggregation = '';
+                this.setState({ isAggregated: false, aggregated: selectRaw[0] });
+              } else {
+                this.setState({ isAggregated: true, aggregated: selectRaw[1] });
+              }
+            }}
+            options={selectRaw.map(toOption)}
+            value={this.state.aggregated}
+            className="query-keyword width-6"
+          />
           <QueryInlineField label={'Time-Series'}>
             <TimeSeries
               timeSeries={this.state.timeSeries}
@@ -125,20 +150,19 @@ export class QueryEditor extends PureComponent<Props, State> {
               variableOptionGroup={this.state.options}
               shouldAdd={this.state.shouldAdd}
             />
-            <Segment
-              onChange={({ value: value = '' }) => {
-                if (value === selectRaw[0]) {
-                  this.setState({ isAggregated: false, aggregated: selectRaw[0] });
-                } else {
-                  this.setState({ isAggregated: true, aggregated: selectRaw[1] });
-                }
-              }}
-              options={selectRaw.map(toOption)}
-              value={this.state.aggregated}
-              className="query-keyword"
-            />
           </QueryInlineField>
         </div>
+        {/* <div className="gf-form">
+          <QueryInlineField label={'Interval'}>
+            <input
+              type="text"
+              className="gf-form-input width-4"
+              required={true}
+              onChange={this.onIntervalChange}
+              value={this.state.interval}
+            />
+          </QueryInlineField>
+        </div> */}
         {this.state.isAggregated && (
           <>
             <div className="gf-form">
@@ -152,17 +176,7 @@ export class QueryEditor extends PureComponent<Props, State> {
             </div>
             <div className="gf-form">
               <QueryInlineField label={'Group By'}>
-                <Segment
-                  onChange={({ value: value = '' }) => {
-                    if (value === selectPoint[0]) {
-                      this.setState({ isPoint: false, point: selectPoint[0] });
-                    } else {
-                      this.setState({ isPoint: true, point: selectPoint[1] });
-                    }
-                  }}
-                  value={this.state.point}
-                  options={selectPoint.map(toOption)}
-                />
+                <QueryField label={selectPoint[0]} />
                 <GroupByLabel
                   groupBy={this.state.groupBy}
                   onChange={this.onGroupByChange}
@@ -177,6 +191,11 @@ export class QueryEditor extends PureComponent<Props, State> {
             </div>
           </>
         )}
+        <div className="gf-form">
+          <QueryInlineField label={'limit'}>
+            <SLimitLabel limitAll={this.state.limitAll} onChange={this.onSLimitChange} />
+          </QueryInlineField>
+        </div>
       </>
     );
   }

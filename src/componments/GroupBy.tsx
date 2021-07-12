@@ -11,25 +11,24 @@ export interface Props {
 
 export const GroupByLabel: FunctionComponent<Props> = ({ groupBy, onChange, isPoint }) => (
   <>
-    {!isPoint && (
+    {
       <>
         <SegmentInput
           value={groupBy.samplingInterval}
-          onChange={string => onChange({ ...groupBy, samplingInterval: string.toString() })}
+          onChange={(string) => onChange({ ...groupBy, samplingInterval: string.toString() })}
+          className="width-5"
+          placeholder="1s"
         />
         <InlineFormLabel className="query-keyword" width={11}>
-          sliding step (optional)
+          sliding step
         </InlineFormLabel>
-        <SegmentInput value={groupBy.step} onChange={string => onChange({ ...groupBy, step: string.toString() })} />
-      </>
-    )}
-    {isPoint && (
-      <>
         <SegmentInput
-          value={groupBy.samplingPoints}
-          onChange={number => onChange({ ...groupBy, samplingPoints: Number.parseInt(number.toString(), 10) })}
+          className="width-5"
+          placeholder="(optional)"
+          value={groupBy.step}
+          onChange={(string) => onChange({ ...groupBy, step: string.toString() })}
         />
       </>
-    )}
+    }
   </>
 );

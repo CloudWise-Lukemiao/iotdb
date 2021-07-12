@@ -3,6 +3,7 @@
   "name": "iotdb",
   "id": "apache-iotdb",
   "metrics": true,
+  "alerting": true,
   "info": {
     "description": "plugin for iotdb",
     "author": {

@@ -21,6 +21,7 @@ export const Aggregation: FunctionComponent<Props> = ({ aggregation, onChange, v
         }
         onChange(itemString);
       }}
+      className="width-6"
     />
   );
 };

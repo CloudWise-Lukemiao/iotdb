@@ -10,7 +10,8 @@ import {
 
 import { MyDataSourceOptions, MyQuery } from './types';
 import { toMetricFindValue } from './functions';
-
+import Base64 from 'crypto-js/enc-base64';
+import Utf8 from 'crypto-js/enc-utf8';
 export class DataSource extends DataSourceApi<MyQuery, MyDataSourceOptions> {
   username: string;
   password: string;
@@ -25,15 +26,15 @@ export class DataSource extends DataSourceApi<MyQuery, MyDataSourceOptions> {
 
   async query(options: DataQueryRequest<MyQuery>): Promise<DataQueryResponse> {
     const { range } = options;
-    const dataFrames = options.targets.map(target => {
-      target.from = range!.from.valueOf();
-      target.to = range!.to.valueOf();
-      target.timeSeries = ['root', ...target.timeSeries];
+    const dataFrames = options.targets.map((target) => {
+      target.stime = range!.from.valueOf();
+      target.etime = range!.to.valueOf();
+      target.paths = ['root', ...target.paths];
       return this.doRequest(target);
     });
     return Promise.all(dataFrames)
-      .then(a => a.reduce((accumulator, value) => accumulator.concat(value), []))
-      .then(data => ({ data }));
+      .then((a) => a.reduce((accumulator, value) => accumulator.concat(value), []))
+      .then((data) => ({ data }));
     // const { range } = options;
     // const from = range!.from.valueOf();
     // const to = range!.to.valueOf();
@@ -53,18 +54,23 @@ export class DataSource extends DataSourceApi<MyQuery, MyDataSourceOptions> {
   }
 
   async doRequest(query: MyQuery) {
+    const myHeader = new Headers();
+    myHeader.append('Content-Type', 'application/json');
+    const Authorization = 'Basic ' + Base64.stringify(Utf8.parse(this.username + ':' + this.password));
+    myHeader.append('Authorization', Authorization);
     return await getBackendSrv()
       .datasourceRequest({
         method: 'POST',
-        url: this.url + '/query',
-        data: query,
+        url: this.url + '/v1/grafana/query/json',
+        data: JSON.stringify(query),
+        headers: myHeader,
       })
-      .then(response => response.data)
-      .then(a => {
+      .then((response) => response.data)
+      .then((a) => {
         if (a instanceof Array) {
           return a.map(toDataFrame);
         } else {
-          throw a.toString();
+          throw 'the result is not array';
         }
       });
   }
@@ -74,30 +80,54 @@ export class DataSource extends DataSourceApi<MyQuery, MyDataSourceOptions> {
   }
 
   async getChildPaths(detachedPath: string[]) {
+    const myHeader = new Headers();
+    myHeader.append('Content-Type', 'application/json');
+    const Authorization = 'Basic ' + Base64.stringify(Utf8.parse(this.username + ':' + this.password));
+    myHeader.append('Authorization', Authorization);
     const prefixPath: string = detachedPath.reduce((a, b) => a + '.' + b);
+    console.log(prefixPath);
     return await getBackendSrv()
       .datasourceRequest({
-        method: 'GET',
-        url: this.url + '/getChildPaths?path=' + prefixPath,
+        method: 'POST',
+        url: this.url + '/v1/grafana/node',
+        data: detachedPath,
+        headers: myHeader,
       })
-      .then(response => {
+      .then((response) => {
         if (response.data instanceof Array) {
           return response.data;
         } else {
-          if (response.data.result.includes('measurement')) {
-            throw 'measurement';
-          } else {
-            return [''];
-          }
+          throw 'the result is not array';
         }
       })
-      .then(data => data.map(toMetricFindValue));
+      .then((data) => data.map(toMetricFindValue));
   }
 
   async testDatasource() {
-    return getBackendSrv().datasourceRequest({
-      url: this.url + '/user/login?username=' + this.username + '&password=' + this.password,
+    const myHeader = new Headers();
+    myHeader.append('Content-Type', 'application/json');
+    const Authorization = 'Basic ' + Base64.stringify(Utf8.parse(this.username + ':' + this.password));
+    myHeader.append('Authorization', Authorization);
+    const response = getBackendSrv().datasourceRequest({
+      url: this.url + '/ping',
       method: 'GET',
+      headers: myHeader,
     });
+    let status = '';
+    let message = '';
+    await response.then((res) => {
+      let b = res.data.code === 4 ? true : false;
+      if (b) {
+        status = 'success';
+        message = res.data.message;
+      } else {
+        status = 'error';
+        message = res.data.message;
+      }
+    });
+    return {
+      status: status,
+      message: message,
+    };
   }
 }

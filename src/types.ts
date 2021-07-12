@@ -1,18 +1,18 @@
 import { DataQuery, DataSourceJsonData } from '@grafana/data';
 
 export interface MyQuery extends DataQuery {
-  timeSeries: string[];
+  paths: string[];
   aggregation?: string;
   fills?: Fill[];
   groupBy?: GroupBy;
-  from: number;
-  to: number;
+  stime: number;
+  etime: number;
+  limitAll?: LimitAll;
 }
 
 export interface GroupBy {
   step: string;
   samplingInterval: string;
-  samplingPoints: number;
 }
 
 export interface Fill {
@@ -21,6 +21,10 @@ export interface Fill {
   duration: string;
 }
 
+export interface LimitAll {
+  slimit: string;
+  limit: string;
+}
 /**
  * These are options configured for each DataSource instance
  */
