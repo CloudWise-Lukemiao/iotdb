@@ -68,21 +68,13 @@ public interface ITimeIndex {
   boolean endTimeEmpty();
 
   /**
-   * @param timeLowerBound time lower bound
+   * @param ttlLowerBound time lower bound
    * @return whether any of the device lives over the given time bound
    */
-  boolean stillLives(long timeLowerBound);
+  boolean stillLives(long ttlLowerBound);
 
   /** @return Calculate file index ram size */
   long calculateRamSize();
-
-  /**
-   * Calculate file index ram increment when insert data in TsFileProcessor
-   *
-   * @param deviceToBeChecked device to be checked
-   * @return ramIncrement
-   */
-  long estimateRamIncrement(String deviceToBeChecked);
 
   /**
    * get time partition

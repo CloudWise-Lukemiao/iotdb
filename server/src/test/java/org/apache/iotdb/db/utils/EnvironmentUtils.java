@@ -24,14 +24,13 @@ import org.apache.iotdb.db.conf.IoTDBConfig;
 import org.apache.iotdb.db.conf.IoTDBDescriptor;
 import org.apache.iotdb.db.conf.directories.DirectoryManager;
 import org.apache.iotdb.db.constant.TestConstant;
+import org.apache.iotdb.db.cq.ContinuousQueryService;
 import org.apache.iotdb.db.engine.StorageEngine;
 import org.apache.iotdb.db.engine.cache.ChunkCache;
 import org.apache.iotdb.db.engine.cache.TimeSeriesMetadataCache;
 import org.apache.iotdb.db.engine.compaction.CompactionMergeTaskPoolManager;
 import org.apache.iotdb.db.engine.trigger.service.TriggerRegistrationService;
-import org.apache.iotdb.db.exception.StorageEngineException;
-import org.apache.iotdb.db.exception.TriggerManagementException;
-import org.apache.iotdb.db.exception.UDFRegistrationException;
+import org.apache.iotdb.db.exception.*;
 import org.apache.iotdb.db.query.context.QueryContext;
 import org.apache.iotdb.db.query.control.FileReaderManager;
 import org.apache.iotdb.db.query.control.QueryResourceManager;
@@ -40,9 +39,11 @@ import org.apache.iotdb.db.query.udf.service.UDFRegistrationService;
 import org.apache.iotdb.db.rescon.PrimitiveArrayManager;
 import org.apache.iotdb.db.rescon.SystemInfo;
 import org.apache.iotdb.db.service.IoTDB;
+import org.apache.iotdb.rpc.TConfigurationConst;
+import org.apache.iotdb.rpc.TSocketWrapper;
 
 import org.apache.commons.io.FileUtils;
-import org.apache.thrift.transport.TSocket;
+import org.apache.thrift.TConfiguration;
 import org.apache.thrift.transport.TTransport;
 import org.apache.thrift.transport.TTransportException;
 import org.slf4j.Logger;
@@ -77,6 +78,8 @@ public class EnvironmentUtils {
 
   private static IoTDB daemon;
 
+  private static TConfiguration tConfiguration = TConfigurationConst.defaultTConfiguration;
+
   public static boolean examinePorts =
       Boolean.parseBoolean(System.getProperty("test.port.closed", "false"));
 
@@ -88,7 +91,8 @@ public class EnvironmentUtils {
     try {
       UDFRegistrationService.getInstance().deregisterAll();
       TriggerRegistrationService.getInstance().deregisterAll();
-    } catch (UDFRegistrationException | TriggerManagementException e) {
+      ContinuousQueryService.getInstance().deregisterAll();
+    } catch (UDFRegistrationException | TriggerManagementException | ContinuousQueryException e) {
       fail(e.getMessage());
     }
 
@@ -153,7 +157,7 @@ public class EnvironmentUtils {
   }
 
   private static boolean examinePorts() {
-    TTransport transport = new TSocket("127.0.0.1", 6667, 100);
+    TTransport transport = TSocketWrapper.wrap(tConfiguration, "127.0.0.1", 6667, 100);
     if (!transport.isOpen()) {
       try {
         transport.open();
@@ -165,7 +169,7 @@ public class EnvironmentUtils {
       }
     }
     // try sync service
-    transport = new TSocket("127.0.0.1", 5555, 100);
+    transport = TSocketWrapper.wrap(tConfiguration, "127.0.0.1", 5555, 100);
     if (!transport.isOpen()) {
       try {
         transport.open();
@@ -237,7 +241,7 @@ public class EnvironmentUtils {
   /** disable memory control</br> this function should be called before all code in the setup */
   public static void envSetUp() {
     logger.warn("EnvironmentUtil setup...");
-    IoTDBDescriptor.getInstance().getConfig().setThriftServerAwaitTimeForStopService(0);
+    IoTDBDescriptor.getInstance().getConfig().setThriftServerAwaitTimeForStopService(60);
     // we do not start 8181 port in test.
     IoTDBDescriptor.getInstance().getConfig().setEnableMetricService(false);
     IoTDBDescriptor.getInstance().getConfig().setAvgSeriesPointNumberThreshold(Integer.MAX_VALUE);

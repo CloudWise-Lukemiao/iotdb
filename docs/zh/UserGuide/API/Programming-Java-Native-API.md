@@ -59,9 +59,32 @@ mvn clean install -pl session -am -Dmaven.test.skip=true
 * 初始化Session
 
 ```java
-Session(String host, int rpcPort)
-Session(String host, String rpcPort, String username, String password)
-Session(String host, int rpcPort, String username, String password)
+    // 全部使用默认配置
+    session = new Session.Builder.build();
+
+    // 指定一个可连接节点
+    session = 
+        new Session.Builder()
+            .host(String host)
+            .port(int port)
+            .build();
+
+    // 指定多个可连接节点
+    session = 
+        new Session.Builder()
+            .nodeUrls(List<String> nodeUrls)
+            .build();
+
+    // 其他配置项
+    session = 
+        new Session.Builder()
+            .fetchSize(int fetchSize)
+            .username(String username)
+            .password(String password)
+            .thriftDefaultBufferSize(int thriftDefaultBufferSize)
+            .thriftMaxFrameSize(int thriftMaxFrameSize)
+            .enableCacheLeader(boolean enableCacheLeader)
+            .build();
 ```
 
 * 开启Session
@@ -105,7 +128,7 @@ void createMultiTimeseries(List<String> paths, List<TSDataType> dataTypes,
 * 创建对齐时间序列
 
 ```
-void createAlignedTimeseries(String devicePath, List<String> measurements,
+void createAlignedTimeseries(String prefixPath, List<String> measurements,
       List<TSDataType> dataTypes, List<TSEncoding> encodings,
       CompressionType compressor, List<String> measurementAliasList);
 ```
@@ -122,14 +145,14 @@ void deleteTimeseries(List<String> paths)
 * 删除一个或多个时间序列在某个时间点前或这个时间点的数据
 
 ```java
-void deleteData(String path, long time)
-void deleteData(List<String> paths, long time)
+void deleteData(String path, long endTime)
+void deleteData(List<String> paths, long endTime)
 ```
 
 * 插入一个 Record，一个 Record 是一个设备一个时间戳下多个测点的数据。服务器需要做类型推断，可能会有额外耗时
 
 ```java
-void insertRecord(String deviceId, long time, List<String> measurements, List<String> values)
+void insertRecord(String prefixPath, long time, List<String> measurements, List<String> values)
 ```
 
 * 插入一个 Tablet，Tablet 是一个设备若干行非空数据块，每一行的列都相同
@@ -141,7 +164,7 @@ void insertTablet(Tablet tablet)
 * 插入多个 Tablet
 
 ```java
-void insertTablets(Map<String, Tablet> tablet)
+void insertTablets(Map<String, Tablet> tablets)
 ```
 
 * 插入多个 Record。服务器需要做类型推断，可能会有额外耗时
@@ -154,7 +177,7 @@ void insertRecords(List<String> deviceIds, List<Long> times,
 * 插入一个 Record，一个 Record 是一个设备一个时间戳下多个测点的数据。提供数据类型后，服务器不需要做类型推断，可以提高性能
 
 ```java
-void insertRecord(String deviceId, long time, List<String> measurements,
+void insertRecord(String prefixPath, long time, List<String> measurements,
    List<TSDataType> types, List<Object> values)
 ```
 
@@ -162,7 +185,7 @@ void insertRecord(String deviceId, long time, List<String> measurements,
 
 ```java
 void insertRecords(List<String> deviceIds, List<Long> times,
-    List<List<String>> measurementsList, List<List<TSDataType>> typesList,
+    List<List<String>> measurementsList,
     List<List<Object>> valuesList)
 ```
 
@@ -203,23 +226,20 @@ void executeNonQueryStatement(String sql)
 * encodings: 编码类型名称列表，如果该工况是非对齐的，直接将其数据类型放入一个list中再放入encodings中，
              如果该工况是对齐的，将所有对齐工况的编码类型放入一个list再放入encodings中
 * compressors: 压缩方式列表                          
-void createDeviceTemplate(
-      String name,
+void createSchemaTemplate(
+      String templateName,
+      List<String> schemaName,
       List<List<String>> measurements,
       List<List<TSDataType>> dataTypes,
       List<List<TSEncoding>> encodings,
       List<CompressionType> compressors)
 ```
 
-
 * 将名为'templateName'的设备模板挂载到'prefixPath'路径下，在执行这一步之前，你需要创建名为'templateName'的设备模板
 
 ``` 
-void setDeviceTemplate(String templateName, String prefixPath)
+void setSchemaTemplate(String templateName, String prefixPath)
 ```
-
-
-
 
 ### 测试接口说明
 
@@ -276,9 +296,7 @@ void testInsertTablet(Tablet tablet)
 
 或 `example/session/src/main/java/org/apache/iotdb/SessionPoolExample.java`
 
-使用对齐时间序列和设备模板的示例可以参见 `example/session/src/main/java/org/apache/iotdb/VectorSessionExample.java`。
-
-  
+使用对齐时间序列和设备模板的示例可以参见 `example/session/src/main/java/org/apache/iotdb/AlignedTimeseriesSessionExample.java`。
 
 ### 示例代码
 
@@ -286,3 +304,98 @@ void testInsertTablet(Tablet tablet)
 
 使用上述接口的示例代码在 ```example/session/src/main/java/org/apache/iotdb/SessionExample.java```
 
+
+
+### 集群信息相关的接口 (仅在集群模式下可用)
+
+集群信息相关的接口允许用户获取如数据分区情况、节点是否当机等信息。
+要使用该API，需要增加依赖：
+
+```xml
+<dependencies>
+    <dependency>
+      <groupId>org.apache.iotdb</groupId>
+      <artifactId>iotdb-thrift-cluster</artifactId>
+      <version>0.13.0-SNAPSHOT</version>
+    </dependency>
+</dependencies>
+```
+
+建立连接与关闭连接的示例:
+
+```java
+import org.apache.thrift.protocol.TBinaryProtocol;
+import org.apache.thrift.transport.TSocket;
+import org.apache.thrift.transport.TTransport;
+import org.apache.thrift.transport.TTransportException;
+import org.apache.iotdb.rpc.RpcTransportFactory;
+
+    public class CluserInfoClient {
+      TTransport transport;
+      ClusterInfoService.Client client;
+      public void connect() {
+          transport =
+              RpcTransportFactory.INSTANCE.getTransport(
+                  new TSocket(
+                      // the RPC address
+                      IoTDBDescriptor.getInstance().getConfig().getRpcAddress(),
+                      // the RPC port
+                      ClusterDescriptor.getInstance().getConfig().getClusterRpcPort()));
+          try {
+            transport.open();
+          } catch (TTransportException e) {
+            Assert.fail(e.getMessage());
+          }
+          //get the client
+          client = new ClusterInfoService.Client(new TBinaryProtocol(transport));
+       }
+      public void close() {
+        transport.close();
+      }  
+    }
+```
+
+API列表：
+
+* 获取集群中的各个节点的信息（构成哈希环）
+
+```java
+list<Node> getRing();
+```
+
+* 给定一个路径（应包括一个SG作为前缀）和起止时间，获取其覆盖的数据分区情况:
+
+```java 
+    /**
+     * @param path input path (should contains a Storage group name as its prefix)
+     * @return the data partition info. If the time range only covers one data partition, the the size
+     * of the list is one.
+     */
+    list<DataPartitionEntry> getDataPartition(1:string path, 2:long startTime, 3:long endTime);
+```
+
+* 给定一个路径（应包括一个SG作为前缀），获取其被分到了哪个节点上:
+```java  
+    /**
+     * @param path input path (should contains a Storage group name as its prefix)
+     * @return metadata partition information
+     */
+    list<Node> getMetaPartition(1:string path);
+```
+
+* 获取所有节点的死活状态:
+```java
+    /**
+     * @return key: node, value: live or not
+     */
+    map<Node, bool> getAllNodeStatus();
+```
+
+* 获取当前连接节点的Raft组信息（投票编号等）（一般用户无需使用该接口）:
+```java  
+    /**
+     * @return A multi-line string with each line representing the total time consumption, invocation
+     *     number, and average time consumption.
+     */
+    string getInstrumentingInfo();
+```

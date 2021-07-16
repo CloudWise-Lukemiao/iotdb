@@ -127,6 +127,7 @@ public class ClusterLastQueryExecutor extends LastQueryExecutor {
         List<Pair<Boolean, TimeValuePair>> timeValuePairs = groupFuture.get();
         for (int i = 0; i < timeValuePairs.size(); i++) {
           if (timeValuePairs.get(i) != null
+              && timeValuePairs.get(i).right != null
               && timeValuePairs.get(i).right.getTimestamp() > results.get(i).right.getTimestamp()) {
             results.get(i).right = timeValuePairs.get(i).right;
           }
@@ -187,7 +188,8 @@ public class ClusterLastQueryExecutor extends LastQueryExecutor {
     private List<Pair<Boolean, TimeValuePair>> calculateSeriesLastLocally(
         PartitionGroup group, List<PartialPath> seriesPaths, QueryContext context)
         throws StorageEngineException, QueryProcessException, IOException {
-      DataGroupMember localDataMember = metaGroupMember.getLocalDataMember(group.getHeader());
+      DataGroupMember localDataMember =
+          metaGroupMember.getLocalDataMember(group.getHeader(), group.getId());
       try {
         localDataMember.syncLeaderWithConsistencyCheck(false);
       } catch (CheckConsistencyException e) {
