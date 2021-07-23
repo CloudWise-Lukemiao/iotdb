@@ -1,9 +1,9 @@
 import React, { ChangeEvent, PureComponent } from 'react';
 import { LegacyForms } from '@grafana/ui';
 import { DataSourcePluginOptionsEditorProps } from '@grafana/data';
-import { MyDataSourceOptions, MySecureJsonData } from './types';
+import { MyDataSourceOptions } from './types';
 
-const { SecretFormField, FormField } = LegacyForms;
+const { FormField } = LegacyForms;
 
 interface Props extends DataSourcePluginOptionsEditorProps<MyDataSourceOptions> {}
 
@@ -16,7 +16,6 @@ export class ConfigEditor extends PureComponent<Props, State> {
       ...options.jsonData,
       url: event.target.value,
     };
-    console.log(jsonData.url);
     onOptionsChange({ ...options, jsonData });
   };
 
@@ -67,8 +66,8 @@ export class ConfigEditor extends PureComponent<Props, State> {
 
   render() {
     const { options } = this.props;
-    const { jsonData, secureJsonFields } = options;
-    const secureJsonData = (options.secureJsonData || {}) as MySecureJsonData;
+    const { jsonData } = options;
+    //const secureJsonData = (options.secureJsonData || {}) as MySecureJsonData;
 
     return (
       <div className="gf-form-group">
@@ -83,7 +82,7 @@ export class ConfigEditor extends PureComponent<Props, State> {
           />
         </div>
 
-        <div className="gf-form-inline">
+        {/* <div className="gf-form-inline">
           <div className="gf-form">
             <SecretFormField
               isConfigured={(secureJsonFields && secureJsonFields.apiKey) as boolean}
@@ -96,7 +95,7 @@ export class ConfigEditor extends PureComponent<Props, State> {
               onChange={this.onAPIKeyChange}
             />
           </div>
-        </div>
+        </div> */}
 
         <div className="gf-form-inline">
           <div className="gf-form">
