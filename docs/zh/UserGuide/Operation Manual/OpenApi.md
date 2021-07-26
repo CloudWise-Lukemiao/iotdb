@@ -19,8 +19,61 @@
 
 -->
 
-# OpenApi
+# Rest API
+IoTDB的restapi设计用于支持与Grafana和Prometheus的集成。它使用OpenAPI标准来定义接口和生成框架源代码。
 OpenApi 接口使用了基础（basic）鉴权，每次url请求都需要在header中携带 'Authorization': 'Basic ' + base64.encode(username + ':' + password)
+为了iotdb数据库安全我们建议使用一台非iotdb的服务器安装反向代理服务（例如nginx等）把http请求转发到iotdb，当然你可以不使用反向代理服务直接使用openapi的rest，如果你正在使用grafana 服务，同时使用nginx则需要在nginx.conf添加 add_header 'Access-Control-Max-Age' xx 来保证可以openapi的正常使用例如:
+
+```
+location /v1/ {
+   proxy_pass  http://ip:port/v1/;  
+   add_header 'Access-Control-Max-Age' 20;
+}
+```
+
+### Configuration
+配置位于“iotdb-engines.properties”中，将“enable_openApi”设置为“true”以启用该模块，而将“false”设置为禁用该模块。
+默认情况下，该值为“false”。
+```
+enable_openApi=true
+```
+
+仅在“enable_openApi=true”时生效。将“openApi_port”设置为数字（1025~65535），以自定义rest服务套接字端口。
+默认情况下，值为“18080”。
+
+```
+openApi_port=18080
+```
+
+设置Prometheus数据存储时的存储组数量
+
+```
+sg_count=5
+```
+
+openApi 开启ssl配置，将“enable_https”设置为“true”以启用该模块，而将“false”设置为禁用该模块。
+默认情况下，该值为“false”。
+
+```
+enable_https=false
+```
+
+keystore所在路径
+
+```
+key_store_path=/xxx/xxx.keystore
+```
+keystore的密码
+
+```
+key_store_pwd=xxxx
+```
+
+ssl 超时时间单位为秒
+
+```
+idle_timeout=5000
+```
 
 ## grafana接口
 
@@ -60,31 +113,10 @@ $ {"internal":["st01"],"series":[{"name":"temperature","leaf":true},{"name":"st0
 ```json
 ["root","sg5"]
 ```
-返回参数:
 
-|参数名称  |参数类型  |参数描述|
-| ------------ | ------------ | ------------ |
-|  internal |  array | 返回的非叶子节点  |
-| series  |  array |  返回节点名称和类型 |
-|  name |  string | 节点名称|
-|  leaf | boolean  |  叶子节点为true，非叶子节点为false |
 响应示例：
 ```json
-{
-  "internal":[
-    "st01"
-  ],
-  "series":[
-    {
-      "name":"temperature",
-      "leaf":true
-    },
-    {
-      "name":"st01",
-      "leaf":false
-    }
-  ]
-}
+["wf01","wf02","wf03"]
 ```
 
 ##为Grafana提供自动降采样数据查询
@@ -92,8 +124,8 @@ $ {"internal":["st01"],"series":[{"name":"temperature","leaf":true},{"name":"st0
 请求头：application/json
 请求url：http://ip:port/v1/grafana/query/json
 ```
-$ curl -H "Content-Type:application/json" -H "Authorization:Basic cm9vdDpyb290" -X POST --data '{"interval":"1s","stime":"1616554359000","etime":"1616554369000","paths":["root","sg6","val01"]}' http://127.0.0.1:18080/v1/grafana/query/json
-$ [{"datapoints":[null,1616554359000,5.0,1616554360000,7.0,1616554361000,7.0,1616554362000,null,1616554363000,7.0,1616554364000,7.0,1616554365000,null,1616554366000,null,1616554367000,null,1616554368000],"target":"root.sg6.val01"}]
+$ curl -H "Content-Type:application/json" -H "Authorization:Basic cm9vdDpyb290" -X POST --data '{"paths":["root","ln","wf02"],"aggregation":"AVG","groupBy":{"samplingInterval":"1s","step":"1s"},"stime":1627286097811,"etime":1627286397811}' http://127.0.0.1:18080/v1/grafana/query/json
+$ [{"datapoints":[[1.2,1627285095273],[0.75,1627285096273],[0.45,1627285097273],[0.15,1627285098273],[0.9,1627285099273],[0.0,1627285100273],[0.15,1627285101273]],"target":"root.ln.wf02"}]
 ```
 参数说明:
 
@@ -101,14 +133,22 @@ $ [{"datapoints":[null,1616554359000,5.0,1616554360000,7.0,1616554361000,7.0,161
 | ------------ | ------------ | ------------ |------------ |
 |  interval | string | 是  |  间隔 |
 | stime  |  number |  是 |  开始时间(时间戳) |
-|  etime | number|  是 |  结束时间(时间戳) |
+| etime | number|  是 |  结束时间(时间戳) |
 | paths  |  array|  是 |  timeseries 为root.sg 转换成path为["root","sg"] |
+| aggregation  |  string | 否  | 函数 |
+| groupBy  |  object | 否  | 分组 |
+| samplingInterval  |  string | 否  | 降采样间隔 |
+| step  |  string | 否  | 降采样步长 |
+| limitAll  |  object | 否  | 限制 |
+| slimit  |  string | 否（默认值为10）  |  列数 |
+| limit  |  string | 否  |  行数 |
 | fills  |  object | 否  |  填充 |
-| dtype  |  string |  否 |  填充类型 |
-| fun  |  string |  否 |  填充函数 |
+| dataType  |  string | 否  |  填充函数 |
+| previous  |  string |  否 |  填充类型 |
+| duration  |  string |  否 |  时间范围 |
 请求示例：
 ```json
-{"interval":"1s","stime":"1616554359000","etime":"1616554369000","paths":["root","sg6","val01"]}
+{"paths":["root","ln"],"limitAll":{"slimit":"1","limit":""},"aggregation":"AVG","groupBy":{"samplingInterval":"1s","step":"1s"},"stime":1627286097811,"etime":1627286397811}
 ```
 返回参数:
 
@@ -122,28 +162,32 @@ $ [{"datapoints":[null,1616554359000,5.0,1616554360000,7.0,1616554361000,7.0,161
 [
   {
     "datapoints":[
-      null,
-      1616554359000,
-      5,
-      1616554360000,
-      7,
-      1616554361000,
-      7,
-      1616554362000,
-      null,
-      1616554363000,
-      7,
-      1616554364000,
-      7,
-      1616554365000,
-      null,
-      1616554366000,
-      null,
-      1616554367000,
-      null,
-      1616554368000
+      [
+        0.8999999761581421,
+        1627286097811
+      ],
+      [
+        0.75,
+        1627286098811
+      ],
+      [
+        0.75,
+        1627286099811
+      ],
+      [
+        1.0499999523162842,
+        1627286100811
+      ],
+      [
+        1.0499999523162842,
+        1627286101811
+      ],
+      [
+        0.6000000238418579,
+        1627286102811
+      ]
     ],
-    "target":"root.sg6.val01"
+    "target":"root.ln.wf03"
   }
 ]
 ```
@@ -160,16 +204,24 @@ $ [{"values":[1616554359000,1616554360000,1616554361000,1616554362000,1616554363
 
 |参数名称  |参数类型  |是否必填|参数描述|
 | ------------ | ------------ | ------------ |------------ |
-|  interval | string | 是  |  时间间隔 |
+|  interval | string | 是  |  间隔 |
 | stime  |  number |  是 |  开始时间(时间戳) |
-|  etime | number|  是 |  结束时间(时间戳) |
+| etime | number|  是 |  结束时间(时间戳) |
 | paths  |  array|  是 |  timeseries 为root.sg 转换成path为["root","sg"] |
+| aggregation  |  string | 否  | 函数 |
+| groupBy  |  object | 否  | 分组 |
+| samplingInterval  |  string | 否  | 降采样间隔 |
+| step  |  string | 否  | 降采样步长 |
+| limitAll  |  object | 否  | 限制 |
+| slimit  |  string | 否（默认值为10）  |  列数 |
+| limit  |  string | 否  |  行数 |
 | fills  |  object | 否  |  填充 |
-| dtype  |  string |  否 |  填充类型 |
-| fun  |  string |  否 |  填充函数 |
+| dataType  |  string | 否  |  填充函数 |
+| previous  |  string |  否 |  填充类型 |
+| duration  |  string |  否 |  时间范围 |
 请求示例：
 ```json
-{"interval":"1s","stime":"1616554359000","etime":"1616554369000","paths":["root","sg7"]}
+{"paths":["root","ln"],"limitAll":{"slimit":"1","limit":""},"aggregation":"AVG","groupBy":{"samplingInterval":"1s","step":"1s"},"stime":1627286097811,"etime":1627286397811}
 ```
 返回参数:
 
@@ -196,7 +248,7 @@ $ [{"values":[1616554359000,1616554360000,1616554361000,1616554362000,1616554363
       1616554368000
     ],
     "name":"Time",
-    "type":"time"
+    "type":"INT64"
   },
   {
     "values":[

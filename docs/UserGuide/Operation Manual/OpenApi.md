@@ -25,6 +25,15 @@ IoTDB's Rest API is designed for supporting integration with Grafana and Prometh
 
 Now, OpenAPI interface uses basic authentication. Every URL request needs to carry 'authorization':'basic '+ Base64. Encode (user name +': '+ password) in the header.
 
+In order to secure the iotdb database, we recommend using a non iotdb server to install a reverse proxy service (such as nginx) to forward HTTP requests to iotdb. Of course, you can directly use rest of OpenAPI without using the reverse proxy service. If you are using grafana service and nginx at the same time, you need to add add in nginx.conf_ Header 'access control Max age' XX to ensure the normal use of OpenAPI, for example:
+
+```
+location /v1/ {
+   proxy_pass  http://ip:port/v1/;  
+   add_header 'Access-Control-Max-Age' 20;
+}
+```
+
 ### Configuration
 
 The configuration is located in `iotdb-engines.properties`, set `enable_openApi` to `true` to enable the module while `false` to disable it.
@@ -41,9 +50,35 @@ By default, the value is `18080`.
 openApi_port=18080
 ```
 
-//TODO explain me.
-sg_count=5
+Number of storage groups when setting Prometheus data store
 
+```
+sg_count=5
+```
+
+OpenAPI enables SSL configuration and sets "enable_ Set "HTTPS" to "true" to enable the module and "false" to disable the module.
+By default, the value is "false".
+
+```
+enable_https=false
+```
+
+Keystore path
+
+```
+key_store_path=/xxx/xxx.keystore
+```
+Password for keystore
+
+```
+key_store_pwd=xxxx
+```
+
+SSL timeout in seconds
+
+```
+idle_timeout=5000
+```
 
 In the following doc, we suppose your IoTDB binds 127.0.0.1 and 18080 port.
 
