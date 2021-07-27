@@ -21,7 +21,7 @@
 
 ## Rest API
 
-IoTDB's Rest API is designed for supporting integration with Grafana and Prometheus. It uses OpenAPI standard to define the interfaces and generate framework source codes.
+IoTDB's Rest API is designed for supporting integration with Grafana and Prometheus， and also provides query, insert and non query interfaces. It uses OpenAPI standard to define the interfaces and generate framework source codes.
 
 Now, OpenAPI interface uses basic authentication. Every URL request needs to carry 'authorization':'basic '+ Base64. Encode (user name +': '+ password) in the header.
 
@@ -72,6 +72,16 @@ Password for keystore
 
 ```
 key_store_pwd=xxxx
+```
+trustStore path（Not required）
+
+```
+trust_store_path=xxxx
+```
+
+Password for trustStore
+```
+trust_store_pwd=xxxx
 ```
 
 SSL timeout in seconds
@@ -370,3 +380,80 @@ Return parameters:
 | Samples  |  array |   |
 | Timestamp  |  number|  timestamp |
 | Value  |  number | value |
+
+## Other interfaces
+
+###  read interfaces
+
+Request method：post
+content-type：application/json
+url：http://ip:port/v1/grafana/query/frame
+```
+$ curl -H "Content-Type:application/json" -H "Authorization:Basic cm9vdDpyb290" -X POST --data '{"sql":"select * from root limit 1 slimit 2"}' http://127.0.0.1:18080/v1/rest/read
+$ [{"values":[1],"name":"Time","type":"INT64"},{"values":[1.1],"name":"root.ln.wf02","type":""},{"values":[2.0],"name":"root.ln.wf03","type":""}]
+```
+Parameter description:
+
+|Parameter name  |Parameter type  |required|description|
+| ------------ | ------------ | ------------ |------------ |
+|  sql | string | true  |   |
+
+
+Return parameters:
+
+|Parameter name  |Parameter Type  |description|
+| ------------ | ------------ | ------------|
+| values | array |  values |
+| name  |  string | measurements |
+| type | String| data type |
+
+###  nonQuery 
+
+Request method：post
+content-type：application/json
+url：http://ip:port/v1/rest/nonQuery
+
+```
+$ curl -H "Content-Type:application/json" -H "Authorization:Basic cm9vdDpyb290" -X POST --data '{"sql":"set storage group to root.ln"}' http://127.0.0.1:18080/v1/rest/nonQuery
+$ {"code":200,"message":"execute sucessfully"}
+```
+Parameter description:
+
+|Parameter name  |Parameter type  |required|description|
+| ------------ | ------------ | ------------ |------------ |
+|  sql | string | true  |   |
+
+
+Return parameters:
+
+|Parameter name  |Parameter Type  |description|
+| ------------ | ------------ | ------------|
+| code | integer |  Status code |
+| message  |  string | message |
+
+###  write 
+
+Request method：post
+content-type：application/json
+url：http://ip:port/v1/rest/write
+
+```
+$ curl -H "Content-Type:application/json" -H "Authorization:Basic cm9vdDpyb290" -X POST --data '{"params":["timestamp","a","b","c"],"values":[1,1,2,4],"paths":["root","ln"]}' http://127.0.0.1:18080/v1/rest/nonQuery
+$ {"code":200,"message":"execute sucessfully"}
+```
+Parameter description:
+
+|Parameter name  |Parameter type  |required|description|
+| ------------ | ------------ | ------------ |------------ |
+|  params | array | true |  measurements  |
+|  values | array | true  | values  |
+|  paths | array | true  | paths  |
+
+
+Return parameters:
+
+|Parameter name  |Parameter Type  |description|
+| ------------ | ------------ | ------------|
+| values | array |  values |
+| name  |  string | measurements |
+| type | String| data type |

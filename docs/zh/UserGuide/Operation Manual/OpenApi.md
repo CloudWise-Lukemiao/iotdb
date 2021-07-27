@@ -20,7 +20,7 @@
 -->
 
 # Rest API
-IoTDB的restapi设计用于支持与Grafana和Prometheus的集成同时也开放了查询、插入和non-query接口。它使用OpenAPI标准来定义接口和生成框架源代码。
+IoTDB的restApi设计用于支持与Grafana和Prometheus的集成同时也提供了查询、插入和non-query接口。它使用OpenAPI标准来定义接口和生成框架源代码。
 OpenApi 接口使用了基础（basic）鉴权，每次url请求都需要在header中携带 'Authorization': 'Basic ' + base64.encode(username + ':' + password)
 为了iotdb数据库安全我们建议使用一台非iotdb的服务器安装反向代理服务（例如nginx等）把http请求转发到iotdb，当然你可以不使用反向代理服务直接使用openapi的rest，如果你正在使用grafana 服务，同时使用nginx则需要在nginx.conf添加 add_header 'Access-Control-Max-Age' xx 来保证可以openapi的正常使用例如:
 
@@ -362,3 +362,81 @@ prometheus 数据经过Protobuf (3.12.3)编码和snappy 压缩后传输
 | Samples  |  array |   |
 | Timestamp  |  number|  时间 |
 | Value  |  number | 值 |
+
+## 其他接口
+
+###  read 接口
+
+请求方式：post
+请求头：application/json
+请求url：http://ip:port/v1/grafana/query/frame
+```
+$ curl -H "Content-Type:application/json" -H "Authorization:Basic cm9vdDpyb290" -X POST --data '{"sql":"select * from root limit 1 slimit 2"}' http://127.0.0.1:18080/v1/rest/read
+$ [{"values":[1],"name":"Time","type":"INT64"},{"values":[1.1],"name":"root.ln.wf02","type":""},{"values":[2.0],"name":"root.ln.wf03","type":""}]
+```
+参数说明:
+
+|参数名称  |参数类型  |是否必填|参数描述|
+| ------------ | ------------ | ------------ |------------ |
+|  sql | string | 是  |   |
+
+
+返回参数:
+
+|参数名称  |参数类型  |参数描述|
+| ------------ | ------------ | ------------|
+| values | array |  值 |
+| name  |  string | 测点名称 |
+| type | String| 数据类型 |
+
+###  nonQuery 接口
+
+请求方式：post
+请求头：application/json
+请求url：http://ip:port/v1/rest/nonQuery
+
+```
+$ curl -H "Content-Type:application/json" -H "Authorization:Basic cm9vdDpyb290" -X POST --data '{"sql":"set storage group to root.ln"}' http://127.0.0.1:18080/v1/rest/nonQuery
+$ {"code":200,"message":"execute sucessfully"}
+```
+参数说明:
+
+|参数名称  |参数类型  |是否必填|参数描述|
+| ------------ | ------------ | ------------ |------------ |
+|  sql | string | 是  |   |
+
+
+返回参数:
+
+|参数名称  |参数类型  |参数描述|
+| ------------ | ------------ | ------------|
+| code | integer |  状态码 |
+| message  |  string | 信息提示 |
+
+###  nonQuery 接口
+
+请求方式：post
+请求头：application/json
+请求url：http://ip:port/v1/rest/write
+
+```
+$ curl -H "Content-Type:application/json" -H "Authorization:Basic cm9vdDpyb290" -X POST --data '{"params":["timestamp","a","b","c"],"values":[1,1,2,4],"paths":["root","ln"]}' http://127.0.0.1:18080/v1/rest/nonQuery
+$ {"code":200,"message":"execute sucessfully"}
+```
+参数说明:
+
+|参数名称  |参数类型  |是否必填|参数描述|
+| ------------ | ------------ | ------------ |------------ |
+|  params | array | 是 |  测点名称  |
+|  values | array | 是  | 值  |
+|  paths | array | 是  | 路径  |
+
+
+返回参数:
+
+|参数名称  |参数类型  |参数描述|
+| ------------ | ------------ | ------------|
+| code | integer |  状态码 |
+| message  |  string | 信息提示 |
+
+
