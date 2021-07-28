@@ -3,7 +3,11 @@ import { LegacyForms } from '@grafana/ui';
 import { DataSourcePluginOptionsEditorProps } from '@grafana/data';
 import { MyDataSourceOptions } from './types';
 
+<<<<<<< Updated upstream
 const { FormField } = LegacyForms;
+=======
+const { FormField, SecretFormField } = LegacyForms;
+>>>>>>> Stashed changes
 
 interface Props extends DataSourcePluginOptionsEditorProps<MyDataSourceOptions> {}
 
@@ -39,7 +43,7 @@ export class ConfigEditor extends PureComponent<Props, State> {
     };
     onOptionsChange({ ...options, jsonData });
   };
-
+  onResetPassword = () => {};
   onPassWordChange = (event: ChangeEvent<HTMLInputElement>) => {
     const { onOptionsChange, options } = this.props;
     const jsonData = {
@@ -67,6 +71,10 @@ export class ConfigEditor extends PureComponent<Props, State> {
   render() {
     const { options } = this.props;
     const { jsonData } = options;
+<<<<<<< Updated upstream
+=======
+    const { secureJsonFields } = options;
+>>>>>>> Stashed changes
     //const secureJsonData = (options.secureJsonData || {}) as MySecureJsonData;
 
     return (
@@ -112,12 +120,13 @@ export class ConfigEditor extends PureComponent<Props, State> {
 
         <div className="gf-form-inline">
           <div className="gf-form">
-            <FormField
+            <SecretFormField
+              isConfigured={(secureJsonFields && secureJsonFields.password) as boolean}
               value={jsonData.password || ''}
               label="password"
-              placeholder="please input password"
               labelWidth={6}
               inputWidth={20}
+              onReset={this.onResetPassword}
               onChange={this.onPassWordChange}
             />
           </div>
