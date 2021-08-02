@@ -138,31 +138,9 @@ Request example：
 ```json
 ["root","sg5"]
 ```
-Return parameters:
-
-|Parameter name  |Parameter Type  |description|
-| ------------ | ------------ | ------------ |
-|  internal |  array | Returned node value  |
-| series  |  array |  Returns the node name and type |
-|  name |  string | node name|
-|  leaf | boolean  |  The leaf node is true and the non leaf node is false |
 Response examples：
 ```json
-{
-  "internal":[
-    "st01"
-  ],
-  "series":[
-    {
-      "name":"temperature",
-      "leaf":true
-    },
-    {
-      "name":"st01",
-      "leaf":false
-    }
-  ]
-}
+["wf01","wf02","wf03"]
 ```
 
 ##Auto Downsampling data query for Grafana
@@ -181,12 +159,13 @@ Parameter description:
 | stime  |  number |  true |  Start time (timestamp) |
 |  etime | number|  true |  End time (timestamp) |
 | paths  |  array|  true |  Timeseries is root.sg Convert to paths to ["root", "sg"] |
-| fills  |  object | false  |  fill |
-| dtype  |  string |  false |  data type |
-| fun  |  string |  false |  function |
+| fills  |  array | false  |  fill |
+| dataType  |  string | 否  |  Filling function |
+| previous  |  string |  否 |  Fill type |
+| duration  |  string |  否 |  duration |
 Request example：
 ```json
-{"interval":"1s","stime":"1616554359000","etime":"1616554369000","paths":["root","sg6","val01"]}
+{"paths":["root","ln"],"limitAll":{"slimit":"1","limit":""},"aggregation":"AVG","groupBy":{"samplingInterval":"1s","step":"1s"},"stime":1627286097811,"etime":1627286397811}
 ```
 Return parameters:
 
@@ -200,28 +179,32 @@ Response examples：
 [
   {
     "datapoints":[
-      null,
-      1616554359000,
-      5,
-      1616554360000,
-      7,
-      1616554361000,
-      7,
-      1616554362000,
-      null,
-      1616554363000,
-      7,
-      1616554364000,
-      7,
-      1616554365000,
-      null,
-      1616554366000,
-      null,
-      1616554367000,
-      null,
-      1616554368000
+      [
+        0.8999999761581421,
+        1627286097811
+      ],
+      [
+        0.75,
+        1627286098811
+      ],
+      [
+        0.75,
+        1627286099811
+      ],
+      [
+        1.0499999523162842,
+        1627286100811
+      ],
+      [
+        1.0499999523162842,
+        1627286101811
+      ],
+      [
+        0.6000000238418579,
+        1627286102811
+      ]
     ],
-    "target":"root.sg6.val01"
+    "target":"root.ln.wf03"
   }
 ]
 ```
@@ -242,12 +225,13 @@ Parameter description:
 | stime  |  number |  true |  Start time (timestamp) |
 |  etime | number|  true |  End time (timestamp) |
 | paths  |  array|  true |  Timeseries is root.sg Convert path to ["root", "sg"] |
-| fills  |  object | false  |  fill |
-| dtype  |  string |  false |  data type |
-| fun  |  string |  false |  function |
+| fills  |  array | false  |  fill |
+| dataType  |  string | 否  |  Filling function |
+| previous  |  string |  否 |  Fill type |
+| duration  |  string |  否 |  duration |
 Request example：
 ```json
-{"interval":"1s","stime":"1616554359000","etime":"1616554369000","paths":["root","sg7"]}
+{"paths":["root","ln"],"limitAll":{"slimit":"1","limit":""},"aggregation":"AVG","groupBy":{"samplingInterval":"1s","step":"1s"},"stime":1627286097811,"etime":1627286397811}
 ```
 Return parameters:
 

@@ -116,7 +116,7 @@ $ {"code":4,"type":"ok","message":"login success!"}
 请求url：http://ip:port/v1/grafana/node
 ```
 $ curl -H "Content-Type:application/json" -H "Authorization:Basic cm9vdDpyb290" -X POST --data '["root","sg5"]' http://127.0.0.1:18080/v1/grafana/node
-$ {"internal":["st01"],"series":[{"name":"temperature","leaf":true},{"name":"st01","leaf":false}]}
+$ ["wf01","wf02","wf03"]
 ```
 请求示例：
 ```json
@@ -151,7 +151,7 @@ $ [{"datapoints":[[1.2,1627285095273],[0.75,1627285096273],[0.45,1627285097273],
 | limitAll  |  object | 否  | 限制 |
 | slimit  |  string | 否（默认值为10）  |  列数 |
 | limit  |  string | 否  |  行数 |
-| fills  |  object | 否  |  填充 |
+| fills  |  array | 否  |  填充 |
 | dataType  |  string | 否  |  填充函数 |
 | previous  |  string |  否 |  填充类型 |
 | duration  |  string |  否 |  时间范围 |
@@ -224,7 +224,7 @@ $ [{"values":[1616554359000,1616554360000,1616554361000,1616554362000,1616554363
 | limitAll  |  object | 否  | 限制 |
 | slimit  |  string | 否（默认值为10）  |  列数 |
 | limit  |  string | 否  |  行数 |
-| fills  |  object | 否  |  填充 |
+| fills  |  array | 否  |  填充 |
 | dataType  |  string | 否  |  填充函数 |
 | previous  |  string |  否 |  填充类型 |
 | duration  |  string |  否 |  时间范围 |
