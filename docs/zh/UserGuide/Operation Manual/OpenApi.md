@@ -20,13 +20,13 @@
 -->
 
 # Rest API
-IoTDB的restApi设计用于支持与Grafana和Prometheus的集成同时也提供了查询、插入和non-query接口。它使用OpenAPI标准来定义接口和生成框架源代码。
-OpenApi 接口使用了基础（basic）鉴权，每次url请求都需要在header中携带 'Authorization': 'Basic ' + base64.encode(username + ':' + password)
-为了iotdb数据库安全我们建议使用一台非iotdb的服务器安装反向代理服务（例如nginx等）把http请求转发到iotdb，当然你可以不使用反向代理服务直接使用openapi的rest，如果你正在使用grafana 服务，同时使用nginx则需要在nginx.conf添加 add_header 'Access-Control-Max-Age' xx 来保证可以openapi的正常使用例如:
+IoTDB的restApi设计用于支持与Grafana和Prometheus的集成同时也提供了查询、插入和non-query接口,它使用OpenAPI标准来定义接口和生成框架源代码。
+为了IoTDB数据库安全我们建议使用一台非IoTDB的服务器安装反向代理服务（例如nginx等）把http请求转发到IoTDB，当然你可以不使用反向代理服务直接使用openapi的rest，如果你正在使用grafana服务同时使用nginx则需要在nginx.conf添加 add_header 'Access-Control-Max-Age' xx 来保证可以正常使用
+OpenApi 接口使用了基础（basic）鉴权，每次url请求都需要在header中携带 'Authorization': 'Basic ' + base64.encode(username + ':' + password)例如:
 
 ```
-location /v1/ {
-   proxy_pass  http://ip:port/v1/;  
+location /rest/ {
+   proxy_pass  http://ip:port/rest/;  
    add_header 'Access-Control-Max-Age' 20;
 }
 ```
@@ -113,9 +113,9 @@ $ {"code":4,"type":"ok","message":"login success!"}
 ##用于通过Grafana逐级获取时间序列名称
 请求方式：post
 请求头：application/json
-请求url：http://ip:port/v1/grafana/node
+请求url：http://ip:port/rest/grafana/node
 ```
-$ curl -H "Content-Type:application/json" -H "Authorization:Basic cm9vdDpyb290" -X POST --data '["root","sg5"]' http://127.0.0.1:18080/v1/grafana/node
+$ curl -H "Content-Type:application/json" -H "Authorization:Basic cm9vdDpyb290" -X POST --data '["root","sg5"]' http://127.0.0.1:18080/rest/grafana/node
 $ ["wf01","wf02","wf03"]
 ```
 请求示例：
@@ -131,9 +131,9 @@ $ ["wf01","wf02","wf03"]
 ##为Grafana提供自动降采样数据查询
 请求方式：post
 请求头：application/json
-请求url：http://ip:port/v1/grafana/query/json
+请求url：http://ip:port/rest/grafana/query/json
 ```
-$ curl -H "Content-Type:application/json" -H "Authorization:Basic cm9vdDpyb290" -X POST --data '{"paths":["root","ln","wf02"],"aggregation":"AVG","groupBy":{"samplingInterval":"1s","step":"1s"},"stime":1627286097811,"etime":1627286397811}' http://127.0.0.1:18080/v1/grafana/query/json
+$ curl -H "Content-Type:application/json" -H "Authorization:Basic cm9vdDpyb290" -X POST --data '{"paths":["root","ln","wf02"],"aggregation":"AVG","groupBy":{"samplingInterval":"1s","step":"1s"},"stime":1627286097811,"etime":1627286397811}' http://127.0.0.1:18080/rest/grafana/query/json
 $ [{"datapoints":[[1.2,1627285095273],[0.75,1627285096273],[0.45,1627285097273],[0.15,1627285098273],[0.9,1627285099273],[0.0,1627285100273],[0.15,1627285101273]],"target":"root.ln.wf02"}]
 ```
 参数说明:
@@ -203,9 +203,9 @@ $ [{"datapoints":[[1.2,1627285095273],[0.75,1627285096273],[0.45,1627285097273],
 ##为Grafana提供自动降采样数据查询（DataFrame）
 请求方式：post
 请求头：application/json
-请求url：http://ip:port/v1/grafana/query/frame
+请求url：http://ip:port/rest/grafana/query/frame
 ```
-$ curl -H "Content-Type:application/json" -H "Authorization:Basic cm9vdDpyb290" -X POST --data '{"interval":"1s","stime":"1616554359000","etime":"1616554369000","paths":["root","sg7"]}' http://127.0.0.1:18080/v1/grafana/query/frame
+$ curl -H "Content-Type:application/json" -H "Authorization:Basic cm9vdDpyb290" -X POST --data '{"interval":"1s","stime":"1616554359000","etime":"1616554369000","paths":["root","sg7"]}' http://127.0.0.1:18080/rest/grafana/query/frame
 $ [{"values":[1616554359000,1616554360000,1616554361000,1616554362000,1616554363000,1616554364000,1616554365000,1616554366000,1616554367000,1616554368000],"name":"Time","type":"time"},{"values":[5.0,7.0,7.0,null,7.0,7.0,null,null,null],"name":"root.sg7.val02","type":"DOUBLE"},{"values":[5.0,null,null,null,null,null,null,null,null],"name":"root.sg7.val03","type":"DOUBLE"}]
 ```
 
@@ -298,7 +298,7 @@ prometheus 数据经过Protobuf (3.12.3)编码和snappy 压缩后传输
 
 请求方式：post
 请求头：application/x-protobuf
-请求url：http://ip:port/v1/prometheus/write
+请求url：http://ip:port/rest/prometheus/write
 参数说明:
 
 |参数名称  |参数类型  |是否必填|参数描述|
@@ -331,7 +331,7 @@ prometheus 数据经过Protobuf (3.12.3)编码和snappy 压缩后传输
 
 请求方式：post
 请求头：application/x-protobuf
-请求url：http://ip:port/v1/prometheus/query
+请求url：http://ip:port/rest/prometheus/query
 参数说明:
 
 |参数名称  |参数类型  |是否必填|参数描述|
@@ -369,9 +369,9 @@ prometheus 数据经过Protobuf (3.12.3)编码和snappy 压缩后传输
 
 请求方式：post
 请求头：application/json
-请求url：http://ip:port/v1/grafana/query/frame
+请求url：http://ip:port/rest/read
 ```
-$ curl -H "Content-Type:application/json" -H "Authorization:Basic cm9vdDpyb290" -X POST --data '{"sql":"select * from root limit 1 slimit 2"}' http://127.0.0.1:18080/v1/rest/read
+$ curl -H "Content-Type:application/json" -H "Authorization:Basic cm9vdDpyb290" -X POST --data '{"sql":"select * from root limit 1 slimit 2"}' http://127.0.0.1:18080/rest/read
 $ [{"values":[1],"name":"Time","type":"INT64"},{"values":[1.1],"name":"root.ln.wf02","type":""},{"values":[2.0],"name":"root.ln.wf03","type":""}]
 ```
 参数说明:
@@ -393,10 +393,10 @@ $ [{"values":[1],"name":"Time","type":"INT64"},{"values":[1.1],"name":"root.ln.w
 
 请求方式：post
 请求头：application/json
-请求url：http://ip:port/v1/rest/nonQuery
+请求url：http://ip:port/rest/nonQuery
 
 ```
-$ curl -H "Content-Type:application/json" -H "Authorization:Basic cm9vdDpyb290" -X POST --data '{"sql":"set storage group to root.ln"}' http://127.0.0.1:18080/v1/rest/nonQuery
+$ curl -H "Content-Type:application/json" -H "Authorization:Basic cm9vdDpyb290" -X POST --data '{"sql":"set storage group to root.ln"}' http://127.0.0.1:18080/rest/nonQuery
 $ {"code":200,"message":"execute sucessfully"}
 ```
 参数说明:
@@ -417,10 +417,10 @@ $ {"code":200,"message":"execute sucessfully"}
 
 请求方式：post
 请求头：application/json
-请求url：http://ip:port/v1/rest/write
+请求url：http://ip:port/rest/write
 
 ```
-$ curl -H "Content-Type:application/json" -H "Authorization:Basic cm9vdDpyb290" -X POST --data '{"params":["timestamp","a","b","c"],"values":[1,1,2,4],"paths":["root","ln"]}' http://127.0.0.1:18080/v1/rest/nonQuery
+$ curl -H "Content-Type:application/json" -H "Authorization:Basic cm9vdDpyb290" -X POST --data '{"params":["timestamp","a","b","c"],"values":[1,1,2,4],"paths":["root","ln"]}' http://127.0.0.1:18080/rest/nonQuery
 $ {"code":200,"message":"execute sucessfully"}
 ```
 参数说明:

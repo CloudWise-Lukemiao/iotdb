@@ -23,13 +23,13 @@
 
 IoTDB's Rest API is designed for supporting integration with Grafana and Prometheus， and also provides query, insert and non query interfaces. It uses OpenAPI standard to define the interfaces and generate framework source codes.
 
-Now, OpenAPI interface uses basic authentication. Every URL request needs to carry 'authorization':'basic '+ Base64. Encode (user name +': '+ password) in the header.
+In order to secure the IoTDB database, we recommend using a non IoTDB server to install a reverse proxy service (such as nginx) to forward HTTP requests to iotdb. Of course, you can directly use rest of OpenAPI without using the reverse proxy service. If you are using grafana service and nginx at the same time, you need to add  in nginx.conf Header 'access control Max age' XX .
 
-In order to secure the iotdb database, we recommend using a non iotdb server to install a reverse proxy service (such as nginx) to forward HTTP requests to iotdb. Of course, you can directly use rest of OpenAPI without using the reverse proxy service. If you are using grafana service and nginx at the same time, you need to add add in nginx.conf_ Header 'access control Max age' XX to ensure the normal use of OpenAPI, for example:
+Now, OpenAPI interface uses basic authentication. Every URL request needs to carry 'authorization':'basic '+ Base64. Encode (user name +': '+ password) in the header. for example:
 
 ```
-location /v1/ {
-   proxy_pass  http://ip:port/v1/;  
+location /rest/ {
+   proxy_pass  http://ip:port/rest/;  
    add_header 'Access-Control-Max-Age' 20;
 }
 ```
@@ -129,9 +129,9 @@ Example of user name password authentication failure
 #### Serve for getting time series name level by level by Grafana
 Request method：post
 content-type：application/json
-url：http://ip:port/v1/grafana/node
+url：http://ip:port/rest/grafana/node
 ```
-$ curl -H "Content-Type:application/json" -H "Authorization:Basic cm9vdDpyb290" -X POST --data '["root","sg5"]' http://127.0.0.1:18080/v1/grafana/node
+$ curl -H "Content-Type:application/json" -H "Authorization:Basic cm9vdDpyb290" -X POST --data '["root","sg5"]' http://127.0.0.1:18080/rest/grafana/node
 $ {"internal":["st01"],"series":[{"name":"temperature","leaf":true},{"name":"st01","leaf":false}]}
 ```
 Request example：
@@ -146,9 +146,9 @@ Response examples：
 ##Auto Downsampling data query for Grafana
 Request method：post
 content-type：application/json
-url：http://ip:port/v1/grafana/query/json
+url：http://ip:port/rest/grafana/query/json
 ```
-$ curl -H "Content-Type:application/json" -H "Authorization:Basic cm9vdDpyb290" -X POST --data '{"interval":"1s","stime":"1616554359000","etime":"1616554369000","paths":["root","sg6","val01"]}' http://127.0.0.1:18080/v1/grafana/query/json
+$ curl -H "Content-Type:application/json" -H "Authorization:Basic cm9vdDpyb290" -X POST --data '{"interval":"1s","stime":"1616554359000","etime":"1616554369000","paths":["root","sg6","val01"]}' http://127.0.0.1:18080/rest/grafana/query/json
 $ [{"datapoints":[null,1616554359000,5.0,1616554360000,7.0,1616554361000,7.0,1616554362000,null,1616554363000,7.0,1616554364000,7.0,1616554365000,null,1616554366000,null,1616554367000,null,1616554368000],"target":"root.sg6.val01"}]
 ```
 Parameter description:
@@ -211,9 +211,9 @@ Response examples：
 ##Auto Downsampling data query for Grafana（DataFrame）
 Request method：post
 content-type：application/json
-url：http://ip:port/v1/grafana/query/frame
+url：http://ip:port/rest/grafana/query/frame
 ```
-$ curl -H "Content-Type:application/json" -H "Authorization:Basic cm9vdDpyb290" -X POST --data '{"interval":"1s","stime":"1616554359000","etime":"1616554369000","paths":["root","sg7"]}' http://127.0.0.1:18080/v1/grafana/query/frame
+$ curl -H "Content-Type:application/json" -H "Authorization:Basic cm9vdDpyb290" -X POST --data '{"interval":"1s","stime":"1616554359000","etime":"1616554369000","paths":["root","sg7"]}' http://127.0.0.1:18080/rest/grafana/query/frame
 $ [{"values":[1616554359000,1616554360000,1616554361000,1616554362000,1616554363000,1616554364000,1616554365000,1616554366000,1616554367000,1616554368000],"name":"Time","type":"time"},{"values":[5.0,7.0,7.0,null,7.0,7.0,null,null,null],"name":"root.sg7.val02","type":"DOUBLE"},{"values":[5.0,null,null,null,null,null,null,null,null],"name":"root.sg7.val03","type":"DOUBLE"}]
 ```
 
@@ -300,7 +300,7 @@ Prometheus data is transmitted after protobuf (3.12.3) encoding and snappy compr
 
 Request method：post
 content-type：application/x-protobuf
-url：http://ip:port/v1/prometheus/write
+url：http://ip:port/rest/prometheus/write
 Parameter description:
 
 |Parameter name  |Parameter type  |required|description|
@@ -333,7 +333,7 @@ Prometheus data is transmitted after protobuf (3.12.3) encoding and snappy compr
 
 Request method：post
 content-type：application/x-protobuf
-url：http://ip:port/v1/prometheus/query
+url：http://ip:port/rest/prometheus/query
 Parameter description:
 
 |Parameter name  |Parameter type  |required|description|
@@ -371,9 +371,9 @@ Return parameters:
 
 Request method：post
 content-type：application/json
-url：http://ip:port/v1/grafana/query/frame
+url：http://ip:port/rest/read
 ```
-$ curl -H "Content-Type:application/json" -H "Authorization:Basic cm9vdDpyb290" -X POST --data '{"sql":"select * from root limit 1 slimit 2"}' http://127.0.0.1:18080/v1/rest/read
+$ curl -H "Content-Type:application/json" -H "Authorization:Basic cm9vdDpyb290" -X POST --data '{"sql":"select * from root limit 1 slimit 2"}' http://127.0.0.1:18080/rest/read
 $ [{"values":[1],"name":"Time","type":"INT64"},{"values":[1.1],"name":"root.ln.wf02","type":""},{"values":[2.0],"name":"root.ln.wf03","type":""}]
 ```
 Parameter description:
@@ -395,10 +395,10 @@ Return parameters:
 
 Request method：post
 content-type：application/json
-url：http://ip:port/v1/rest/nonQuery
+url：http://ip:port/rest/nonQuery
 
 ```
-$ curl -H "Content-Type:application/json" -H "Authorization:Basic cm9vdDpyb290" -X POST --data '{"sql":"set storage group to root.ln"}' http://127.0.0.1:18080/v1/rest/nonQuery
+$ curl -H "Content-Type:application/json" -H "Authorization:Basic cm9vdDpyb290" -X POST --data '{"sql":"set storage group to root.ln"}' http://127.0.0.1:18080/rest/nonQuery
 $ {"code":200,"message":"execute sucessfully"}
 ```
 Parameter description:
@@ -419,10 +419,10 @@ Return parameters:
 
 Request method：post
 content-type：application/json
-url：http://ip:port/v1/rest/write
+url：http://ip:port/rest/write
 
 ```
-$ curl -H "Content-Type:application/json" -H "Authorization:Basic cm9vdDpyb290" -X POST --data '{"params":["timestamp","a","b","c"],"values":[1,1,2,4],"paths":["root","ln"]}' http://127.0.0.1:18080/v1/rest/nonQuery
+$ curl -H "Content-Type:application/json" -H "Authorization:Basic cm9vdDpyb290" -X POST --data '{"params":["timestamp","a","b","c"],"values":[1,1,2,4],"paths":["root","ln"]}' http://127.0.0.1:18080/rest/nonQuery
 $ {"code":200,"message":"execute sucessfully"}
 ```
 Parameter description:
