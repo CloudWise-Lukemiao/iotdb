@@ -19,6 +19,7 @@
 
 @echo off
 set EXISTS_ENV=`go version|findstr -c "go version"`
+echo "%EXISTS_ENV%"
 IF  "%EXISTS_ENV%" == "0" (
 echo "Need to install go environment"
 exit
@@ -26,9 +27,9 @@ exit
 go get -u github.com/grafana/grafana-plugin-sdk-go
 go mod tidy
 go env
-set CHECK_RESULTS =`go env |findstr GOPATH= | sed 's/\"//g'`
-go_path="%CHECK_RESULTS%"
+set CHECK_RESULTS =`go env |findstr GOPATH=
 go run "%CHECK_RESULTS%"/pkg/mod/github.com/magefile/mage@v1.13.0/bootstrap.go
-$go_path/bin/mage -v
+dir
+"%CHECK_RESULTS%"/bin/mage -v
 
 @echo on
