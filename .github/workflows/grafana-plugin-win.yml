@@ -1,4 +1,4 @@
-name: Grafana plugin build
+name: Grafana plugin windows build
 
 on:
   push:
