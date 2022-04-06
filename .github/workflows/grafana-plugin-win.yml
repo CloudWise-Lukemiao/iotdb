@@ -56,4 +56,4 @@ jobs:
       - name: Install dependencies and Build backend
         run: |
           cd grafana-plugin
-          backend-compile.bat
+          backendCompile.bat
