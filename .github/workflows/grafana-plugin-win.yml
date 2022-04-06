@@ -49,11 +49,11 @@ jobs:
 
       - name: Install dependencies and Build and test frontend
         run: |
-          cd ./grafana-plugin
+          cd grafana-plugin
           yarn install --frozen-lockfile
           yarn build
 
       - name: Install dependencies and Build backend
         run: |
-          cd ./grafana-plugin
+          cd grafana-plugin
           backend-compile.bat
