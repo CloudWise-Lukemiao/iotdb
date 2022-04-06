@@ -14,7 +14,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { MetricFindValue, SelectableValue } from '@grafana/data';
+import React, { FunctionComponent } from 'react';
+import { SegmentInput } from '@grafana/ui';
 
-export const toOption = (value: string) => ({ label: value, value } as SelectableValue<string>);
-export const toMetricFindValue = (data: any) => ({ text: data } as MetricFindValue);
+export interface Props {
+  fill: string;
+  onChange: (fillValue: string) => void;
+}
+
+export const FillValue: FunctionComponent<Props> = ({ fill, onChange }) => (
+  <>
+    {
+      <>
+        <SegmentInput
+          className="min-width-8"
+          placeholder="(optional)"
+          value={fill}
+          onChange={(string) => onChange(string.toString())}
+        />
+      </>
+    }
+  </>
+);

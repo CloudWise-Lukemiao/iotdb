@@ -48,9 +48,37 @@ export class DataSource extends DataSourceWithBackend<IoTDBQuery, IoTDBOptions> 
   }
 
   metricFindQuery(query: any, options?: any): Promise<MetricFindValue[]> {
-    query = getTemplateSrv().replace(query, options.scopedVars);
-    const sql = { sql: query };
-    return this.getVariablesResult(sql);
+    if (!(query instanceof Array)) {
+      query = getTemplateSrv().replace(query, options.scopedVars);
+      const sql = { sql: query };
+      return this.getVariablesResult(sql);
+    } else {
+      return this.getChildPaths(query);
+    }
+  }
+
+  async getChildPaths(detachedPath: string[]) {
+    const myHeader = new Headers();
+    myHeader.append('Content-Type', 'application/json');
+    const Authorization = 'Basic ' + Buffer.from(this.username + ':' + this.password).toString('base64');
+    myHeader.append('Authorization', Authorization);
+    const prefixPath: string = detachedPath.reduce((a, b) => a + '.' + b);
+    console.log(prefixPath);
+    return await getBackendSrv()
+      .datasourceRequest({
+        method: 'POST',
+        url: this.url + '/grafana/v1/node',
+        data: detachedPath,
+        headers: myHeader,
+      })
+      .then((response) => {
+        if (response.data instanceof Array) {
+          return response.data;
+        } else {
+          throw 'the result is not array';
+        }
+      })
+      .then((data) => data.map(toMetricFindValue));
   }
 
   async getVariablesResult(sql: object) {

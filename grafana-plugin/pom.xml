@@ -31,9 +31,6 @@
     <name>IoTDB Grafana plugin</name>
     <description>IoTDB Grafana plugin</description>
     <packaging>pom</packaging>
-    <profiles>
-        <profile>
-            <id>compile-grafana-plugin</id>
             <build>
                 <plugins>
                     <plugin>
@@ -137,6 +134,4 @@
                     </plugin>
                 </plugins>
             </build>
-        </profile>
-    </profiles>
 </project>

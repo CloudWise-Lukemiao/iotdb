@@ -17,9 +17,19 @@
 
 package org.apache.iotdb.db.protocol.rest.impl;
 
+import com.google.gson.Gson;
+import java.io.IOException;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
 import org.apache.iotdb.commons.conf.IoTDBConstant;
+import org.apache.iotdb.db.auth.AuthException;
 import org.apache.iotdb.db.conf.IoTDBDescriptor;
+import org.apache.iotdb.db.exception.StorageEngineException;
+import org.apache.iotdb.db.exception.metadata.IllegalPathException;
+import org.apache.iotdb.db.exception.metadata.MetadataException;
 import org.apache.iotdb.db.exception.query.QueryProcessException;
+import org.apache.iotdb.db.metadata.path.PartialPath;
 import org.apache.iotdb.db.protocol.rest.GrafanaApiService;
 import org.apache.iotdb.db.protocol.rest.NotFoundException;
 import org.apache.iotdb.db.protocol.rest.handler.AuthorizationHandler;
@@ -31,12 +41,17 @@ import org.apache.iotdb.db.protocol.rest.model.ExpressionRequest;
 import org.apache.iotdb.db.protocol.rest.model.SQL;
 import org.apache.iotdb.db.qp.physical.PhysicalPlan;
 import org.apache.iotdb.db.qp.physical.crud.QueryPlan;
+import org.apache.iotdb.db.qp.physical.sys.ShowChildPathsPlan;
 import org.apache.iotdb.db.qp.physical.sys.ShowPlan;
+import org.apache.iotdb.db.qp.physical.sys.ShowPlan.ShowContentType;
 import org.apache.iotdb.db.query.context.QueryContext;
 import org.apache.iotdb.db.query.dataset.groupby.GroupByLevelDataSet;
 import org.apache.iotdb.db.service.IoTDB;
 import org.apache.iotdb.db.service.basic.ServiceProvider;
 import org.apache.iotdb.rpc.TSStatusCode;
+import org.apache.iotdb.tsfile.exception.filter.QueryFilterOptimizationException;
+import org.apache.iotdb.tsfile.read.common.Field;
+import org.apache.iotdb.tsfile.read.common.RowRecord;
 import org.apache.iotdb.tsfile.read.query.dataset.QueryDataSet;
 
 import com.google.common.base.Joiner;
@@ -46,6 +61,7 @@ import javax.ws.rs.core.Response;
 import javax.ws.rs.core.SecurityContext;
 
 import java.time.ZoneId;
+import org.apache.thrift.TException;
 
 public class GrafanaApiServiceImpl extends GrafanaApiService {
 
@@ -180,5 +196,51 @@ public class GrafanaApiServiceImpl extends GrafanaApiService {
                 .code(TSStatusCode.SUCCESS_STATUS.getStatusCode())
                 .message(TSStatusCode.SUCCESS_STATUS.name()))
         .build();
+  }
+
+  @Override
+  public Response node(List<String> requestBody, SecurityContext securityContext)
+      throws NotFoundException {
+    Gson result = new Gson();
+    PartialPath path = null;
+    List<Object> nodes = new ArrayList<Object>();
+    try {
+      if (requestBody != null && requestBody.size() > 0) {
+        String timeser = Joiner.on(".").join(requestBody);
+        path = new PartialPath(timeser);
+        String sql="show child paths "+path;
+        PhysicalPlan physicalPlan =
+            serviceProvider.getPlanner().parseSQLToGrafanaQueryPlan(sql, ZoneId.systemDefault());
+
+        Response response = authorizationHandler.checkAuthority(securityContext, physicalPlan);
+        if (response != null) {
+          return response;
+        }
+
+        final long queryId = ServiceProvider.SESSION_MANAGER.requestQueryId(true);
+        QueryContext queryContext =
+            serviceProvider.genQueryContext(
+                queryId,
+                physicalPlan.isDebug(),
+                System.currentTimeMillis(),
+                sql,
+                IoTDBConstant.DEFAULT_CONNECTION_TIMEOUT_MS);
+        QueryDataSet queryDataSet =
+            serviceProvider.createQueryDataSet(
+                queryContext, physicalPlan, IoTDBConstant.DEFAULT_FETCH_SIZE);
+        while (queryDataSet.hasNext()) {
+          RowRecord rowRecord = queryDataSet.next();
+          List<org.apache.iotdb.tsfile.read.common.Field> fields = rowRecord.getFields();
+          for (Field field : fields) {
+            String nodePaths = field.getObjectValue(field.getDataType()).toString();
+            String[] nodeSubPath = nodePaths.split("\\.");
+            nodes.add(nodeSubPath[nodeSubPath.length - 1]);
+          }
+        }
+      }
+    }  catch (Exception e) {
+      return Response.ok().entity(ExceptionHandler.tryCatchException(e)).build();
+    }
+    return Response.ok().entity(result.toJson(nodes)).build();
   }
 }
