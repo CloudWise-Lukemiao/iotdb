@@ -30,3 +30,5 @@ set CHECK_RESULTS =`go env |findstr GOPATH= | sed 's/\"//g'`
 go_path="%CHECK_RESULTS%"
 go run "%CHECK_RESULTS%"/pkg/mod/github.com/magefile/mage@v1.13.0/bootstrap.go
 $go_path/bin/mage -v
+
+@echo on
