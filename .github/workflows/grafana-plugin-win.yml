@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
+  win-build:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v2
@@ -56,4 +56,4 @@ jobs:
       - name: Install dependencies and Build backend
         run: |
           cd grafana-plugin
-          cmd call backendCompile.bat
+          cmd backendCompile.bat
