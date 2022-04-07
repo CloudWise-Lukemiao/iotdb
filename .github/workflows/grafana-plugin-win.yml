@@ -54,6 +54,7 @@ jobs:
           yarn build
 
       - name: Install dependencies and Build backend
+        shell: bash
         run: |
           cd grafana-plugin
-          cmd backendCompile.bat
+          ./backend-compile.sh
