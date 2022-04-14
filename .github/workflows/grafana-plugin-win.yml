@@ -63,4 +63,5 @@ jobs:
           go env
           go run C:\\Users\\runneradmin\\go\\pkg\\mod\\github.com\\magefile\\mage@v1.13.0\\bootstrap.go
           dir
-          C:\\Users\\runneradmin\\go\\bin\\mage -v
+          echo "---------------------"
+          C:\Users\runneradmin\go\bin\mage -v
