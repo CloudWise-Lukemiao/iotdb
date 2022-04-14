@@ -62,5 +62,5 @@ jobs:
           go mod tidy
           go env
           set CHECK_RESULTS =`go env GOPATH`
-          go run "%CHECK_RESULTS%"\\pkg\\mod\\github.com\\magefile\\mage@v1.13.0\\bootstrap.go
+          go run C:\\Users\\runneradmin\\go\\pkg\\mod\\github.com\\magefile\\mage@v1.13.0\\bootstrap.go
           dir
