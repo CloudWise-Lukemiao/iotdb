@@ -64,7 +64,9 @@ jobs:
           go run C:\\Users\\runneradmin\\go\\pkg\\mod\\github.com\\magefile\\mage@v1.13.0\\bootstrap.go
           cd C:\Users\runneradmin\go\pkg\mod\github.com\magefile\mage@v1.13.0
           dir
-          echo "---------------------"
+          echo "-----------222----------"
+          mage
+          echo "----------333-----------"
           cd C:\\Users\\runneradmin\\go\\pkg\\mod\\github.com\\magefile\\mage@v1.13.0
           mage -v
-           echo "------****---------------"
+          echo "------****---------------"
