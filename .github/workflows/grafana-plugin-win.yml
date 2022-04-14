@@ -68,4 +68,3 @@ jobs:
           cd C:\\Users\\runneradmin\\go\\pkg\\mod\\github.com\\magefile\\mage@v1.13.0
           mage -v
            echo "------****---------------"
-          C:\\Users\\runneradmin\\go\\pkg\\mod\\github.com\\magefile\\mage@v1.13.0\\mage -v
