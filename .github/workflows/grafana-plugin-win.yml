@@ -54,7 +54,14 @@ jobs:
           yarn build
 
       - name: Install dependencies and Build backend
-        shell: bash
         run: |
           cd grafana-plugin
-          ./backend-compile.sh
+          go version
+          go env -w GOPROXY=https://goproxy.cn
+          go get -u github.com/grafana/grafana-plugin-sdk-go
+          go mod tidy
+          go env
+          set CHECK_RESULTS =`go env GOPATH`
+          go run "%CHECK_RESULTS%"/pkg/mod/github.com/magefile/mage@v1.13.0/bootstrap.go
+          dir
+          "%CHECK_RESULTS%"/bin/mage -v
