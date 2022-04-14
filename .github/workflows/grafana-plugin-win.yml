@@ -64,4 +64,4 @@ jobs:
           set CHECK_RESULTS =`go env GOPATH`
           go run "%CHECK_RESULTS%"\\pkg\\mod\\github.com\\magefile\\mage@v1.13.0\\bootstrap.go
           dir
-          "%CHECK_RESULTS%"/bin/mage -v
+          "%CHECK_RESULTS%"\\bin\\mage -v
