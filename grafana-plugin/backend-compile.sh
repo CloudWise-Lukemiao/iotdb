@@ -30,7 +30,6 @@ go_path=${check_results/GOPATH=/}
 chmod 755 $go_path/pkg/mod/github.com/magefile/*
 go run $go_path/pkg/mod/github.com/magefile/mage@v1.13.0/bootstrap.go
 go env
-cd $go_path/
-pwd
+cd $go_path/pkg/mod/github.com/magefile/mage@v1.13.0/bin
 ls
-$go_path/bin/mage -v
+$go_path/pkg/mod/github.com/magefile/mage@v1.13.0/bin/mage -v
