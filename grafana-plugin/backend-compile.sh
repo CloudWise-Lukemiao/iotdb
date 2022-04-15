@@ -22,7 +22,8 @@ if [ $exists_env -eq 0 ];then
 echo "Need to install go environment"
 exit 1
 fi
-pwd
+work_path=`pwd|sed 's/\"//g'`
+echo $work_path
 go env -w GOPROXY=https://goproxy.cn
 go get -u github.com/grafana/grafana-plugin-sdk-go
 go mod tidy
@@ -31,7 +32,5 @@ go_path=${check_results/GOPATH=/}
 cd $go_path/pkg/mod/github.com/magefile/mage@v1.13.0
 chmod 755 $go_path/pkg/mod/github.com/magefile/*
 go run $go_path/pkg/mod/github.com/magefile/mage@v1.13.0/bootstrap.go
-cd /home/runner/work/iotdb/iotdb/grafana-plugin/
-/home/runner/go/bin/mage -v
-cd /home/runner/work/iotdb/iotdb/grafana-plugin/dist
-ls
+cd $work_path/grafana-plugin/
+$go_path/go/bin/mage -v
