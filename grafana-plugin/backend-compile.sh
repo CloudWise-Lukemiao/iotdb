@@ -32,3 +32,5 @@ cd $go_path/pkg/mod/github.com/magefile/mage@v1.13.0
 chmod 755 $go_path/pkg/mod/github.com/magefile/*
 go run $go_path/pkg/mod/github.com/magefile/mage@v1.13.0/bootstrap.go
 /home/runner/go/bin/mage -v
+cd dist
+ls
