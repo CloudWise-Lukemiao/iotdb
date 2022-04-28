@@ -57,6 +57,7 @@ jobs:
       - name: Install dependencies and Build backend
         run: |
           cd grafana-plugin
+          dir
           go version
           go env -w GOPROXY=https://goproxy.cn
           go get -u github.com/grafana/grafana-plugin-sdk-go
@@ -68,8 +69,6 @@ jobs:
           dir
           go bootstrap.go
           dir
-          echo "-----------3333----------"
-          mage -v
           echo "-----------222----------"
           C:\Users\runneradmin\go\pkg\mod\github.com\magefile\mage@v1.13.0\mage -v
           echo "------****---------------"
