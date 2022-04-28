@@ -67,7 +67,9 @@ jobs:
           dir
           cd C:\Users\runneradmin\go\pkg\mod\github.com\magefile\mage@v1.13.0
           dir
-          go run C:\Users\runneradmin\go\pkg\mod\github.com\magefile\mage@v1.13.0\bootstrap.go
+          set MAGEFILE_CACHE=C:\Users\runneradmin\go
+          echo %MAGEFILE_CACHE%
+          go run bootstrap.go
           dir
           echo "-----------222----------"
           cd D:\a\iotdb\iotdb\grafana-plugin
