@@ -62,6 +62,7 @@ jobs:
           go get -u github.com/grafana/grafana-plugin-sdk-go
           go mod tidy
           go env
+          echo "------**1111**---------------"
           cd C:\Users\runneradmin\go
           dir
           echo "------****---------------"
