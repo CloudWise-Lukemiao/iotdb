@@ -67,7 +67,7 @@ jobs:
           dir
           cd C:\Users\runneradmin\go\pkg\mod\github.com\magefile\mage@v1.13.0
           dir
-          mage install
+          C:\Users\runneradmin\go\pkg\mod\github.com\magefile\mage@v1.13.0\mage install
           dir
           echo "-----------222----------"
           cd D:\a\iotdb\iotdb\grafana-plugin
