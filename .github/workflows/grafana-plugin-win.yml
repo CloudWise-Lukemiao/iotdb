@@ -67,7 +67,7 @@ jobs:
           dir
           cd C:\Users\runneradmin\go\pkg\mod\github.com\magefile\mage@v1.13.0
           dir
-          set MAGEFILE_CACHE=C:\Users\runneradmin\go
+          setx MAGEFILE_CACHE "C:\Users\runneradmin\go"
           echo %MAGEFILE_CACHE%
           go run bootstrap.go
           dir
