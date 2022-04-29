@@ -64,8 +64,9 @@ jobs:
           go mod tidy
           cd C:\Users\runneradmin\go
           git clone https://github.com/magefile/mage
-          dir
           cd mage
-          dir
           go run bootstrap.go
+          dir
+          cd D:\a\iotdb\iotdb\grafana-plugin
+          C:\Users\runneradmin\go\mage\mage -v
           dir
