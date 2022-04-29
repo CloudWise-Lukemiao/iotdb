@@ -57,19 +57,4 @@ jobs:
       - name: Install dependencies and Build backend
         run: |
           cd grafana-plugin
-          go version
-          for /f "delims=" %%i in ( 'ipconfig /all^| find /i "ipv4" ') do set MYIP=%%i & echo %MYIP%
-          cd %CHECK_RESULTS%/pkg/mod/github.com/magefile/mage@v1.13.0/bootstrap.go
-          dir
-          go env -w GOPROXY=https://goproxy.cn
-          go get -u github.com/grafana/grafana-plugin-sdk-go
-          go mod tidy
-          cd C:\Users\runneradmin\go
-          git clone https://github.com/magefile/mage
-          cd mage
-          go run bootstrap.go
-          dir
-          cd D:\a\iotdb\iotdb\grafana-plugin
-          C:\Users\runneradmin\go\bin\mage -v
-          cd dist
-          dir
+          cmd: call ackendCompile.bat
