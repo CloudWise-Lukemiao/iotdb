@@ -69,4 +69,5 @@ jobs:
           dir
           cd D:\a\iotdb\iotdb\grafana-plugin
           C:\Users\runneradmin\go\bin\mage -v
+          cd dist
           dir
