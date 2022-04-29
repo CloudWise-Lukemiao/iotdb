@@ -65,5 +65,7 @@ jobs:
           cd C:\Users\runneradmin\go
           git clone https://github.com/magefile/mage
           dir
+          cd mage
+          dir
           go run bootstrap.go
           mage -v
