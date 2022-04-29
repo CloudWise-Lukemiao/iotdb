@@ -59,7 +59,7 @@ jobs:
           cd grafana-plugin
           go version
           go env GOPATH
-          for /F  %%i in (‘go env GOPATH‘) do (set CHECK_RESULTS=%%i)
+          for /d  %%i in (‘go env GOPATH‘) do (set CHECK_RESULTS=%%i)
           echo CHECK_RESULTS=%CHECK_RESULTS%
           cd %CHECK_RESULTS%/pkg/mod/github.com/magefile/mage@v1.13.0/bootstrap.go
           dir
