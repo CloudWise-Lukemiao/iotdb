@@ -58,8 +58,9 @@ jobs:
         run: |
           cd grafana-plugin
           go version
-          set CHECK_RESULTS =`go env GOPATH=`
-          cd "%CHECK_RESULTS%"/pkg/mod/github.com/magefile/mage@v1.13.0/bootstrap.go
+          for /F %%i in ('go env GOPATH=') do ( set CHECK_RESULTS=%%i)
+          echo CHECK_RESULTS=%CHECK_RESULTS%
+          cd %CHECK_RESULTS%/pkg/mod/github.com/magefile/mage@v1.13.0/bootstrap.go
           dir
           go env -w GOPROXY=https://goproxy.cn
           go get -u github.com/grafana/grafana-plugin-sdk-go

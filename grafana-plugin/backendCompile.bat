@@ -27,7 +27,7 @@ exit
 go get -u github.com/grafana/grafana-plugin-sdk-go
 go mod tidy
 go env
-set CHECK_RESULTS =`go env |findstr GOPATH=`
+set CHECK_RESULTS =`go env GOPATH=`
 cd "%CHECK_RESULTS%"/pkg/mod/github.com/magefile/mage@v1.13.0/bootstrap.go
 dir
 go run bootstrap.go
