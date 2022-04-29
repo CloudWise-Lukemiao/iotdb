@@ -68,4 +68,4 @@ jobs:
           cd mage
           dir
           go run bootstrap.go
-          mage -v
+          dir
