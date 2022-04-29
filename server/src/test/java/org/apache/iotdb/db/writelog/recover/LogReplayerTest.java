@@ -33,9 +33,10 @@ import org.apache.iotdb.db.exception.StorageGroupProcessorException;
 import org.apache.iotdb.db.exception.metadata.IllegalPathException;
 import org.apache.iotdb.db.exception.metadata.MetadataException;
 import org.apache.iotdb.db.exception.query.QueryProcessException;
-import org.apache.iotdb.db.metadata.PartialPath;
 import org.apache.iotdb.db.metadata.mnode.IMeasurementMNode;
 import org.apache.iotdb.db.metadata.mnode.MeasurementMNode;
+import org.apache.iotdb.db.metadata.path.MeasurementPath;
+import org.apache.iotdb.db.metadata.path.PartialPath;
 import org.apache.iotdb.db.qp.physical.crud.DeletePlan;
 import org.apache.iotdb.db.qp.physical.crud.InsertRowPlan;
 import org.apache.iotdb.db.qp.physical.crud.InsertTabletPlan;
@@ -50,7 +51,7 @@ import org.apache.iotdb.tsfile.file.metadata.enums.TSDataType;
 import org.apache.iotdb.tsfile.file.metadata.enums.TSEncoding;
 import org.apache.iotdb.tsfile.read.TimeValuePair;
 import org.apache.iotdb.tsfile.read.reader.IPointReader;
-import org.apache.iotdb.tsfile.write.schema.UnaryMeasurementSchema;
+import org.apache.iotdb.tsfile.write.schema.MeasurementSchema;
 
 import org.junit.After;
 import org.junit.Before;
@@ -91,11 +92,11 @@ public class LogReplayerTest {
     TsFileResource tsFileResource = new TsFileResource(tsFile);
     IMemTable memTable = new PrimitiveMemTable();
 
-    IoTDB.metaManager.setStorageGroup(new PartialPath("root.sg"));
+    IoTDB.schemaProcessor.setStorageGroup(new PartialPath("root.sg"));
     try {
       for (int i = 0; i <= 5; i++) {
         for (int j = 0; j <= 5; j++) {
-          IoTDB.metaManager.createTimeseries(
+          IoTDB.schemaProcessor.createTimeseries(
               new PartialPath("root.sg.device" + i + ".sensor" + j),
               TSDataType.INT64,
               TSEncoding.PLAIN,
@@ -160,31 +161,29 @@ public class LogReplayerTest {
                 ByteBuffer.allocateDirect(
                     IoTDBDescriptor.getInstance().getConfig().getWalBufferSize() / 2);
             return byteBuffers;
-          });
+          },
+          null);
 
       for (int i = 0; i < 5; i++) {
-        ReadOnlyMemChunk memChunk =
-            memTable.query(
+        MeasurementPath fullPath =
+            new MeasurementPath(
                 "root.sg.device" + i,
                 "sensor" + i,
-                new UnaryMeasurementSchema(
+                new MeasurementSchema(
                     "sensor" + i,
                     TSDataType.INT64,
                     TSEncoding.RLE,
                     CompressionType.UNCOMPRESSED,
-                    Collections.emptyMap()),
-                Long.MIN_VALUE,
-                null);
+                    Collections.emptyMap()));
+        ReadOnlyMemChunk memChunk = memTable.query(fullPath, Long.MIN_VALUE, null);
         IPointReader iterator = memChunk.getPointReader();
-        if (i == 0) {
-          assertFalse(iterator.hasNextTimeValuePair());
-        } else {
+        if (i != 0) {
           assertTrue(iterator.hasNextTimeValuePair());
           TimeValuePair timeValuePair = iterator.nextTimeValuePair();
           assertEquals(i, timeValuePair.getTimestamp());
           assertEquals(i, timeValuePair.getValue().getLong());
-          assertFalse(iterator.hasNextTimeValuePair());
         }
+        assertFalse(iterator.hasNextTimeValuePair());
       }
 
       Modification[] mods = modFile.getModifications().toArray(new Modification[0]);
@@ -202,18 +201,17 @@ public class LogReplayerTest {
 
       // test insert tablet
       for (int i = 0; i < 2; i++) {
-        ReadOnlyMemChunk memChunk =
-            memTable.query(
+        MeasurementPath fullPath =
+            new MeasurementPath(
                 "root.sg.device5",
                 "sensor" + i,
-                new UnaryMeasurementSchema(
+                new MeasurementSchema(
                     "sensor" + i,
                     TSDataType.INT64,
                     TSEncoding.PLAIN,
                     CompressionType.UNCOMPRESSED,
-                    Collections.emptyMap()),
-                Long.MIN_VALUE,
-                null);
+                    Collections.emptyMap()));
+        ReadOnlyMemChunk memChunk = memTable.query(fullPath, Long.MIN_VALUE, null);
         // s0 has datatype boolean, but required INT64, will return null
         if (i == 0) {
           assertNull(memChunk);

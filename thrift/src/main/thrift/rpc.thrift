@@ -269,6 +269,15 @@ struct TSInsertRecordsOfOneDeviceReq {
     6: optional bool isAligned
 }
 
+struct TSInsertStringRecordsOfOneDeviceReq {
+    1: required i64 sessionId
+    2: required string prefixPath
+    3: required list<list<string>> measurementsList
+    4: required list<list<string>> valuesList
+    5: required list<i64> timestamps
+    6: optional bool isAligned
+}
+
 struct TSInsertStringRecordsReq {
   1: required i64 sessionId
   2: required list<string> prefixPaths
@@ -303,8 +312,10 @@ struct TSCreateAlignedTimeseriesReq {
   3: required list<string> measurements
   4: required list<i32> dataTypes
   5: required list<i32> encodings
-  6: required i32 compressor
+  6: required list<i32> compressors
   7: optional list<string> measurementAlias
+  8: optional list<map<string, string>> tagsList
+  9: optional list<map<string, string>> attributesList
 }
 
 struct TSRawDataQueryReq {
@@ -362,11 +373,49 @@ struct TSSetSchemaTemplateReq {
 struct TSCreateSchemaTemplateReq {
   1: required i64 sessionId
   2: required string name
-  3: required list<string> schemaNames
-  4: required list<list<string>> measurements
-  5: required list<list<i32>> dataTypes
-  6: required list<list<i32>> encodings
+  3: required binary serializedTemplate
+}
+
+struct TSAppendSchemaTemplateReq {
+  1: required i64 sessionId
+  2: required string name
+  3: required bool isAligned
+  4: required list<string> measurements
+  5: required list<i32> dataTypes
+  6: required list<i32> encodings
   7: required list<i32> compressors
+}
+
+struct TSPruneSchemaTemplateReq {
+  1: required i64 sessionId
+  2: required string name
+  3: required string path
+}
+
+struct TSQueryTemplateReq {
+  1: required i64 sessionId
+  2: required string name
+  3: required i32 queryType
+  4: optional string measurement
+}
+
+struct TSQueryTemplateResp {
+  1: required TSStatus status
+  2: required i32 queryType
+  3: optional bool result
+  4: optional i32 count
+  5: optional list<string> measurements
+}
+
+struct TSUnsetSchemaTemplateReq {
+  1: required i64 sessionId
+  2: required string prefixPath
+  3: required string templateName
+}
+
+struct TSDropSchemaTemplateReq {
+  1: required i64 sessionId
+  2: required string templateName
 }
 
 service TSIService {
@@ -420,6 +469,8 @@ service TSIService {
 
   TSStatus insertRecordsOfOneDevice(1:TSInsertRecordsOfOneDeviceReq req);
 
+  TSStatus insertStringRecordsOfOneDevice(1:TSInsertStringRecordsOfOneDeviceReq req);
+
   TSStatus insertStringRecords(1:TSInsertStringRecordsReq req);
 
   TSStatus testInsertTablet(1:TSInsertTabletReq req);
@@ -446,5 +497,15 @@ service TSIService {
 
   TSStatus createSchemaTemplate(1:TSCreateSchemaTemplateReq req);
 
+  TSStatus appendSchemaTemplate(1:TSAppendSchemaTemplateReq req);
+
+  TSStatus pruneSchemaTemplate(1:TSPruneSchemaTemplateReq req);
+
+  TSQueryTemplateResp querySchemaTemplate(1:TSQueryTemplateReq req);
+
   TSStatus setSchemaTemplate(1:TSSetSchemaTemplateReq req);
+
+  TSStatus unsetSchemaTemplate(1:TSUnsetSchemaTemplateReq req);
+
+  TSStatus dropSchemaTemplate(1:TSDropSchemaTemplateReq req);
 }

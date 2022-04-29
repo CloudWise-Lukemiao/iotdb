@@ -22,7 +22,7 @@ import org.apache.iotdb.db.conf.IoTDBConfig;
 import org.apache.iotdb.db.exception.metadata.IllegalParameterOfPathException;
 import org.apache.iotdb.db.exception.metadata.IllegalPathException;
 import org.apache.iotdb.db.exception.metadata.MetadataException;
-import org.apache.iotdb.db.metadata.PartialPath;
+import org.apache.iotdb.db.metadata.path.PartialPath;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,11 +31,11 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-import static org.apache.iotdb.db.conf.IoTDBConstant.LOSS;
-import static org.apache.iotdb.db.conf.IoTDBConstant.SDT;
-import static org.apache.iotdb.db.conf.IoTDBConstant.SDT_COMP_DEV;
-import static org.apache.iotdb.db.conf.IoTDBConstant.SDT_COMP_MAX_TIME;
-import static org.apache.iotdb.db.conf.IoTDBConstant.SDT_COMP_MIN_TIME;
+import static org.apache.iotdb.commons.conf.IoTDBConstant.LOSS;
+import static org.apache.iotdb.commons.conf.IoTDBConstant.SDT;
+import static org.apache.iotdb.commons.conf.IoTDBConstant.SDT_COMP_DEV;
+import static org.apache.iotdb.commons.conf.IoTDBConstant.SDT_COMP_MAX_TIME;
+import static org.apache.iotdb.commons.conf.IoTDBConstant.SDT_COMP_MIN_TIME;
 
 public class MetaFormatUtils {
 
@@ -80,7 +80,9 @@ public class MetaFormatUtils {
 
   /** check whether the node name uses "." correctly */
   private static void checkNameFormat(String name) throws MetadataException {
-    if (name.contains(".") && !(name.startsWith("\"") && name.endsWith("\""))) {
+    if (!((name.startsWith("'") && name.endsWith("'"))
+            || (name.startsWith("\"") && name.endsWith("\"")))
+        && name.contains(".")) {
       throw new MetadataException(String.format("%s is an illegal name.", name));
     }
   }

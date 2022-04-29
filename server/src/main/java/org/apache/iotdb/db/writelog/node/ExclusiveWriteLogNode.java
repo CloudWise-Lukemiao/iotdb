@@ -18,12 +18,14 @@
  */
 package org.apache.iotdb.db.writelog.node;
 
-import org.apache.iotdb.db.concurrent.IoTDBThreadPoolFactory;
+import org.apache.iotdb.commons.concurrent.IoTDBThreadPoolFactory;
 import org.apache.iotdb.db.conf.IoTDBConfig;
 import org.apache.iotdb.db.conf.IoTDBDescriptor;
 import org.apache.iotdb.db.conf.directories.DirectoryManager;
 import org.apache.iotdb.db.engine.fileSystem.SystemFileFactory;
 import org.apache.iotdb.db.qp.physical.PhysicalPlan;
+import org.apache.iotdb.db.utils.MmapUtil;
+import org.apache.iotdb.db.utils.ThreadUtils;
 import org.apache.iotdb.db.writelog.io.ILogReader;
 import org.apache.iotdb.db.writelog.io.ILogWriter;
 import org.apache.iotdb.db.writelog.io.LogWriter;
@@ -38,12 +40,14 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
-import java.nio.channels.ClosedChannelException;
+import java.nio.MappedByteBuffer;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
+
+import static org.apache.iotdb.commons.concurrent.ThreadName.WAL_FLUSH;
 
 /** This WriteLogNode is used to manage insert ahead logs of a TsFile. */
 public class ExclusiveWriteLogNode implements WriteLogNode, Comparable<ExclusiveWriteLogNode> {
@@ -67,6 +71,7 @@ public class ExclusiveWriteLogNode implements WriteLogNode, Comparable<Exclusive
   private volatile ByteBuffer[] bufferArray;
 
   private final Object switchBufferCondition = new Object();
+
   private final ReentrantLock lock = new ReentrantLock();
   private final ExecutorService FLUSH_BUFFER_THREAD_POOL;
 
@@ -76,6 +81,8 @@ public class ExclusiveWriteLogNode implements WriteLogNode, Comparable<Exclusive
   private int bufferedLogNum = 0;
 
   private final AtomicBoolean deleted = new AtomicBoolean(false);
+
+  private int bufferOverflowNum = 0;
 
   /**
    * constructor of ExclusiveWriteLogNode.
@@ -91,7 +98,7 @@ public class ExclusiveWriteLogNode implements WriteLogNode, Comparable<Exclusive
     }
     // this.identifier contains the storage group name + tsfile name.
     FLUSH_BUFFER_THREAD_POOL =
-        IoTDBThreadPoolFactory.newSingleThreadExecutor("Flush-WAL-Thread-" + this.identifier);
+        IoTDBThreadPoolFactory.newSingleThreadExecutor(WAL_FLUSH.getName() + "-" + this.identifier);
   }
 
   @Override
@@ -116,19 +123,26 @@ public class ExclusiveWriteLogNode implements WriteLogNode, Comparable<Exclusive
       // if the size of a single plan bigger than logBufferWorking
       // we need to clear the buffer to drop something wrong that has written.
       logBufferWorking.clear();
-      throw new IOException("Log cannot fit into the buffer, please increase wal_buffer_size", e);
+      int neededSize = plan.getSerializedSize();
+      throw new IOException(
+          "Log cannot fit into the buffer, please increase wal_buffer_size to more than "
+              + neededSize * 2,
+          e);
     } finally {
       lock.unlock();
     }
   }
 
   private void putLog(PhysicalPlan plan) {
-    logBufferWorking.mark();
     try {
       plan.serialize(logBufferWorking);
     } catch (BufferOverflowException e) {
-      logger.info("WAL BufferOverflow !");
-      logBufferWorking.reset();
+      bufferOverflowNum++;
+      if (bufferOverflowNum > 200) {
+        logger.info(
+            "WAL bytebuffer overflows too many times. If this occurs frequently, please increase wal_buffer_size.");
+        bufferOverflowNum = 0;
+      }
       sync();
       plan.serialize(logBufferWorking);
     }
@@ -159,6 +173,26 @@ public class ExclusiveWriteLogNode implements WriteLogNode, Comparable<Exclusive
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
       logger.warn("Waiting for current buffer being flushed interrupted");
+    } finally {
+      lock.unlock();
+    }
+  }
+
+  @Override
+  public void release() {
+    ThreadUtils.stopThreadPool(FLUSH_BUFFER_THREAD_POOL, WAL_FLUSH);
+    lock.lock();
+    try {
+      if (this.logBufferWorking != null && this.logBufferWorking instanceof MappedByteBuffer) {
+        MmapUtil.clean((MappedByteBuffer) this.logBufferFlushing);
+      }
+      if (this.logBufferIdle != null && this.logBufferIdle instanceof MappedByteBuffer) {
+        MmapUtil.clean((MappedByteBuffer) this.logBufferIdle);
+      }
+      if (this.logBufferFlushing != null && this.logBufferFlushing instanceof MappedByteBuffer) {
+        MmapUtil.clean((MappedByteBuffer) this.logBufferFlushing);
+      }
+      logger.debug("ByteBuffers are freed successfully");
     } finally {
       lock.unlock();
     }
@@ -263,8 +297,8 @@ public class ExclusiveWriteLogNode implements WriteLogNode, Comparable<Exclusive
       if (bufferedLogNum == 0) {
         return;
       }
-      switchBufferWorkingToFlushing();
       ILogWriter currWriter = getCurrentFileWriter();
+      switchBufferWorkingToFlushing();
       FLUSH_BUFFER_THREAD_POOL.submit(() -> flushBuffer(currWriter));
       bufferedLogNum = 0;
       logger.debug("Log node {} ends sync.", identifier);
@@ -281,19 +315,16 @@ public class ExclusiveWriteLogNode implements WriteLogNode, Comparable<Exclusive
   private void flushBuffer(ILogWriter writer) {
     try {
       writer.write(logBufferFlushing);
-    } catch (ClosedChannelException e) {
-      // ignore
-    } catch (IOException e) {
-      logger.warn("Log node {} sync failed, change system mode to read-only", identifier, e);
+    } catch (Throwable e) {
+      logger.error("Log node {} sync failed, change system mode to read-only", identifier, e);
       IoTDBDescriptor.getInstance().getConfig().setReadOnly(true);
-      return;
-    }
-
-    // switch buffer flushing to idle and notify the sync thread
-    synchronized (switchBufferCondition) {
-      logBufferIdle = logBufferFlushing;
-      logBufferFlushing = null;
-      switchBufferCondition.notifyAll();
+    } finally {
+      // switch buffer flushing to idle and notify the sync thread
+      synchronized (switchBufferCondition) {
+        logBufferIdle = logBufferFlushing;
+        logBufferFlushing = null;
+        switchBufferCondition.notifyAll();
+      }
     }
   }
 

@@ -29,7 +29,7 @@ import org.apache.iotdb.db.engine.version.VersionController;
 import org.apache.iotdb.db.exception.StorageEngineException;
 import org.apache.iotdb.db.exception.StorageGroupProcessorException;
 import org.apache.iotdb.db.exception.metadata.MetadataException;
-import org.apache.iotdb.db.metadata.PartialPath;
+import org.apache.iotdb.db.metadata.path.PartialPath;
 import org.apache.iotdb.db.qp.physical.crud.DeletePlan;
 import org.apache.iotdb.db.qp.physical.crud.InsertRowPlan;
 import org.apache.iotdb.db.service.IoTDB;
@@ -41,19 +41,19 @@ import org.apache.iotdb.tsfile.common.conf.TSFileDescriptor;
 import org.apache.iotdb.tsfile.exception.write.WriteProcessException;
 import org.apache.iotdb.tsfile.file.metadata.enums.TSDataType;
 import org.apache.iotdb.tsfile.file.metadata.enums.TSEncoding;
-import org.apache.iotdb.tsfile.read.ReadOnlyTsFile;
+import org.apache.iotdb.tsfile.read.TsFileReader;
 import org.apache.iotdb.tsfile.read.TsFileSequenceReader;
 import org.apache.iotdb.tsfile.read.common.Field;
 import org.apache.iotdb.tsfile.read.common.Path;
 import org.apache.iotdb.tsfile.read.common.RowRecord;
 import org.apache.iotdb.tsfile.read.expression.QueryExpression;
 import org.apache.iotdb.tsfile.read.query.dataset.QueryDataSet;
+import org.apache.iotdb.tsfile.utils.MeasurementGroup;
 import org.apache.iotdb.tsfile.write.TsFileWriter;
 import org.apache.iotdb.tsfile.write.record.TSRecord;
 import org.apache.iotdb.tsfile.write.record.datapoint.DataPoint;
-import org.apache.iotdb.tsfile.write.schema.IMeasurementSchema;
+import org.apache.iotdb.tsfile.write.schema.MeasurementSchema;
 import org.apache.iotdb.tsfile.write.schema.Schema;
-import org.apache.iotdb.tsfile.write.schema.UnaryMeasurementSchema;
 import org.apache.iotdb.tsfile.write.writer.RestorableTsFileIOWriter;
 
 import org.apache.commons.io.FileUtils;
@@ -122,10 +122,10 @@ public class SeqTsFileRecoverTest {
   }
 
   private void prepareData() throws IOException, MetadataException, WriteProcessException {
-    IoTDB.metaManager.setStorageGroup(new PartialPath("root.sg"));
+    IoTDB.schemaProcessor.setStorageGroup(new PartialPath("root.sg"));
     for (int i = 0; i < 10; i++) {
       for (int j = 0; j < 10; j++) {
-        IoTDB.metaManager.createTimeseries(
+        IoTDB.schemaProcessor.createTimeseries(
             new PartialPath("root.sg.device" + i + ".sensor" + j),
             TSDataType.INT64,
             TSEncoding.PLAIN,
@@ -135,13 +135,13 @@ public class SeqTsFileRecoverTest {
     }
 
     Schema schema = new Schema();
-    Map<String, IMeasurementSchema> template = new HashMap<>();
+    Map<String, MeasurementSchema> template = new HashMap<>();
     for (int i = 0; i < 10; i++) {
       template.put(
-          "sensor" + i,
-          new UnaryMeasurementSchema("sensor" + i, TSDataType.INT64, TSEncoding.PLAIN));
+          "sensor" + i, new MeasurementSchema("sensor" + i, TSDataType.INT64, TSEncoding.PLAIN));
     }
-    schema.registerSchemaTemplate("template1", template);
+    MeasurementGroup group = new MeasurementGroup(false, template);
+    schema.registerSchemaTemplate("template1", group);
     for (int i = 0; i < 10; i++) {
       schema.registerDevice("root.sg.device" + i, "template1");
     }
@@ -206,9 +206,9 @@ public class SeqTsFileRecoverTest {
 
   private void prepareDataWithDeletion()
       throws IOException, MetadataException, WriteProcessException {
-    IoTDB.metaManager.setStorageGroup(new PartialPath("root.sg"));
+    IoTDB.schemaProcessor.setStorageGroup(new PartialPath("root.sg"));
     for (int i = 0; i < 4; i++) {
-      IoTDB.metaManager.createTimeseries(
+      IoTDB.schemaProcessor.createTimeseries(
           new PartialPath("root.sg.device" + i + ".sensor1"),
           TSDataType.INT64,
           TSEncoding.PLAIN,
@@ -217,10 +217,10 @@ public class SeqTsFileRecoverTest {
     }
 
     Schema schema = new Schema();
-    Map<String, IMeasurementSchema> template = new HashMap<>();
-    template.put(
-        "sensor1", new UnaryMeasurementSchema("sensor1", TSDataType.INT64, TSEncoding.PLAIN));
-    schema.registerSchemaTemplate("template1", template);
+    Map<String, MeasurementSchema> template = new HashMap<>();
+    template.put("sensor1", new MeasurementSchema("sensor1", TSDataType.INT64, TSEncoding.PLAIN));
+    MeasurementGroup group = new MeasurementGroup(false, template);
+    schema.registerSchemaTemplate("template1", group);
     for (int i = 0; i < 4; i++) {
       schema.registerDevice("root.sg.device" + i, "template1");
     }
@@ -393,7 +393,7 @@ public class SeqTsFileRecoverTest {
       throws StorageGroupProcessorException, IOException, MetadataException, WriteProcessException {
     prepareData();
     TsFileRecoverPerformer performer =
-        new TsFileRecoverPerformer(logNodePrefix, resource, false, false);
+        new TsFileRecoverPerformer(logNodePrefix, resource, false, false, null);
     RestorableTsFileIOWriter writer =
         performer.recover(
             true,
@@ -422,7 +422,7 @@ public class SeqTsFileRecoverTest {
       assertEquals(19, resource.getEndTime("root.sg.device" + i));
     }
 
-    ReadOnlyTsFile readOnlyTsFile = new ReadOnlyTsFile(new TsFileSequenceReader(tsF.getPath()));
+    TsFileReader tsFileReader = new TsFileReader(new TsFileSequenceReader(tsF.getPath()));
     List<Path> pathList = new ArrayList<>();
     for (int j = 0; j < 10; j++) {
       for (int k = 0; k < 10; k++) {
@@ -430,7 +430,7 @@ public class SeqTsFileRecoverTest {
       }
     }
     QueryExpression queryExpression = QueryExpression.create(pathList, null);
-    QueryDataSet dataSet = readOnlyTsFile.query(queryExpression);
+    QueryDataSet dataSet = tsFileReader.query(queryExpression);
     for (int i = 0; i < 20; i++) {
       RowRecord record = dataSet.next();
       assertEquals(i, record.getTimestamp());
@@ -445,7 +445,7 @@ public class SeqTsFileRecoverTest {
     pathList.add(new Path("root.sg.device99", "sensor1"));
     pathList.add(new Path("root.sg.device99", "sensor4"));
     queryExpression = QueryExpression.create(pathList, null);
-    dataSet = readOnlyTsFile.query(queryExpression);
+    dataSet = tsFileReader.query(queryExpression);
     Assert.assertTrue(dataSet.hasNext());
     RowRecord record = dataSet.next();
     Assert.assertEquals("2\t0\tnull", record.toString());
@@ -453,7 +453,7 @@ public class SeqTsFileRecoverTest {
     record = dataSet.next();
     Assert.assertEquals("100\tnull\t0", record.toString());
 
-    readOnlyTsFile.close();
+    tsFileReader.close();
   }
 
   @Test
@@ -461,7 +461,7 @@ public class SeqTsFileRecoverTest {
       throws StorageGroupProcessorException, IOException, MetadataException, WriteProcessException {
     prepareData();
     TsFileRecoverPerformer performer =
-        new TsFileRecoverPerformer(logNodePrefix, resource, false, true);
+        new TsFileRecoverPerformer(logNodePrefix, resource, false, true, null);
     RestorableTsFileIOWriter writer =
         performer.recover(
             true,
@@ -491,7 +491,7 @@ public class SeqTsFileRecoverTest {
       assertEquals(19, resource.getEndTime("root.sg.device" + i));
     }
 
-    ReadOnlyTsFile readOnlyTsFile = new ReadOnlyTsFile(new TsFileSequenceReader(tsF.getPath()));
+    TsFileReader tsFileReader = new TsFileReader(new TsFileSequenceReader(tsF.getPath()));
     List<Path> pathList = new ArrayList<>();
     for (int j = 0; j < 10; j++) {
       for (int k = 0; k < 10; k++) {
@@ -499,7 +499,7 @@ public class SeqTsFileRecoverTest {
       }
     }
     QueryExpression queryExpression = QueryExpression.create(pathList, null);
-    QueryDataSet dataSet = readOnlyTsFile.query(queryExpression);
+    QueryDataSet dataSet = tsFileReader.query(queryExpression);
     for (int i = 0; i < 20; i++) {
       RowRecord record = dataSet.next();
       assertEquals(i, record.getTimestamp());
@@ -514,7 +514,7 @@ public class SeqTsFileRecoverTest {
     pathList.add(new Path("root.sg.device99", "sensor1"));
     pathList.add(new Path("root.sg.device99", "sensor4"));
     queryExpression = QueryExpression.create(pathList, null);
-    dataSet = readOnlyTsFile.query(queryExpression);
+    dataSet = tsFileReader.query(queryExpression);
     Assert.assertTrue(dataSet.hasNext());
     RowRecord record = dataSet.next();
     Assert.assertEquals("2\t0\tnull", record.toString());
@@ -522,7 +522,7 @@ public class SeqTsFileRecoverTest {
     record = dataSet.next();
     Assert.assertEquals("100\tnull\t0", record.toString());
 
-    readOnlyTsFile.close();
+    tsFileReader.close();
   }
 
   @Test
@@ -530,7 +530,7 @@ public class SeqTsFileRecoverTest {
       throws StorageGroupProcessorException, IOException, MetadataException, WriteProcessException {
     prepareDataWithDeletion();
     TsFileRecoverPerformer performer =
-        new TsFileRecoverPerformer(logNodePrefix, resource, false, true);
+        new TsFileRecoverPerformer(logNodePrefix, resource, false, true, null);
     RestorableTsFileIOWriter writer =
         performer.recover(
             true,

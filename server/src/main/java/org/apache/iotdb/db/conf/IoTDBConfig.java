@@ -18,13 +18,16 @@
  */
 package org.apache.iotdb.db.conf;
 
+import org.apache.iotdb.commons.conf.IoTDBConstant;
 import org.apache.iotdb.db.conf.directories.DirectoryManager;
-import org.apache.iotdb.db.engine.compaction.CompactionStrategy;
-import org.apache.iotdb.db.engine.merge.selector.MergeFileStrategy;
+import org.apache.iotdb.db.engine.compaction.constant.CompactionPriority;
+import org.apache.iotdb.db.engine.compaction.cross.CrossCompactionStrategy;
+import org.apache.iotdb.db.engine.compaction.inner.InnerCompactionStrategy;
 import org.apache.iotdb.db.engine.storagegroup.timeindex.TimeIndexLevel;
 import org.apache.iotdb.db.exception.LoadConfigurationException;
-import org.apache.iotdb.db.metadata.MManager;
-import org.apache.iotdb.db.service.TSServiceImpl;
+import org.apache.iotdb.db.metadata.LocalSchemaProcessor;
+import org.apache.iotdb.db.service.thrift.impl.InfluxDBServiceImpl;
+import org.apache.iotdb.db.service.thrift.impl.TSServiceImpl;
 import org.apache.iotdb.rpc.RpcTransportFactory;
 import org.apache.iotdb.rpc.RpcUtils;
 import org.apache.iotdb.tsfile.common.conf.TSFileDescriptor;
@@ -37,6 +40,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -52,28 +60,19 @@ public class IoTDBConfig {
       "org.apache.iotdb.db.conf.directories.strategy.";
   private static final String DEFAULT_MULTI_DIR_STRATEGY = "MaxDiskUsableSpaceFirstStrategy";
 
-  // e.g., a31+/$%#&[]{}3e4
-  private static final String ID_MATCHER =
-      "([a-zA-Z0-9/\"[ ],:@#$%&{}()*=?!~\\[\\]\\-+\\u2E80-\\u9FFF_]+)";
-
   private static final String STORAGE_GROUP_MATCHER = "([a-zA-Z0-9_.\\-\\u2E80-\\u9FFF]+)";
-
-  // e.g.,  .s1
-  private static final String PARTIAL_NODE_MATCHER = "[" + PATH_SEPARATOR + "]" + ID_MATCHER;
-
-  // for path like: root.sg1.d1."1.2.3", root.sg.d1."1.2.3"
-  // TODO : need to match the rule of antlr grammar
-  private static final String NODE_MATCHER =
-      "([" + PATH_SEPARATOR + "][\"])?" + ID_MATCHER + "(" + PARTIAL_NODE_MATCHER + ")*([\"])?";
-
   public static final Pattern STORAGE_GROUP_PATTERN = Pattern.compile(STORAGE_GROUP_MATCHER);
 
+  // e.g., a31+/$%#&[]{}3e4, "a.b", 'a.b'
+  private static final String NODE_NAME_MATCHER = "([^\n\t]+)";
+
+  // e.g.,  .s1
+  private static final String PARTIAL_NODE_MATCHER = "[" + PATH_SEPARATOR + "]" + NODE_NAME_MATCHER;
+
+  private static final String NODE_MATCHER =
+      "([" + PATH_SEPARATOR + "])?" + NODE_NAME_MATCHER + "(" + PARTIAL_NODE_MATCHER + ")*";
+
   public static final Pattern NODE_PATTERN = Pattern.compile(NODE_MATCHER);
-
-  /** Port which the metrics service listens to. */
-  private int metricsPort = 8181;
-
-  private boolean enableMetricService = false;
 
   /** whether to enable the mqtt service. */
   private boolean enableMQTTService = false;
@@ -105,6 +104,9 @@ public class IoTDBConfig {
   /** Port which the JDBC server listens to. */
   private int rpcPort = 6667;
 
+  /** Port which the influxdb protocol server listens to. */
+  private int influxDBRpcPort = 8086;
+
   /** Max concurrent client number */
   private int rpcMaxConcurrentClientNum = 65535;
 
@@ -118,7 +120,7 @@ public class IoTDBConfig {
   private long allocateMemoryForSchema = Runtime.getRuntime().maxMemory() * 1 / 10;
 
   /** Memory allocated for the read process besides cache */
-  private long allocateMemoryForReadWithoutCache = allocateMemoryForRead * 3 / 10;
+  private long allocateMemoryForReadWithoutCache = allocateMemoryForRead * 300 / 1001;
 
   private volatile int maxQueryDeduplicatedPathNum = 1000;
 
@@ -177,15 +179,27 @@ public class IoTDBConfig {
   /** Unit: millisecond */
   private long walPoolTrimIntervalInMS = 10_000;
 
+  /** if OOM occurs when registering bytebuffer, system will sleep awhile and then try again. */
+  private long registerBufferSleepIntervalInMs = 200;
+
+  /** if total sleep time exceeds this, system will reject this write. */
+  private long registerBufferRejectThresholdInMs = 10_000;
+
   /** Unit: byte */
   private int estimatedSeriesSize = 300;
 
   /**
    * Size of log buffer for every MetaData operation. If the size of a MetaData operation plan is
-   * larger than this parameter, then the MetaData operation plan will be rejected by MManager.
+   * larger than this parameter, then the MetaData operation plan will be rejected by SchemaRegion.
    * Unit: byte
    */
   private int mlogBufferSize = 1024 * 1024;
+
+  /**
+   * The cycle when metadata log is periodically forced to be written to disk(in milliseconds) If
+   * set this parameter to 0 it means call channel.force(true) after every each operation
+   */
+  private long syncMlogPeriodInMs = 100;
 
   /**
    * The size of log buffer for every trigger management operation plan. If the size of a trigger
@@ -233,6 +247,10 @@ public class IoTDBConfig {
   private String triggerDir =
       IoTDBConstant.EXT_FOLDER_NAME + File.separator + IoTDBConstant.TRIGGER_FOLDER_NAME;
 
+  /** External lib directory for MQTT, stores user-uploaded JAR files */
+  private String mqttDir =
+      IoTDBConstant.EXT_FOLDER_NAME + File.separator + IoTDBConstant.MQTT_FOLDER_NAME;
+
   /** Data directory of data. It can be settled as dataDirs = {"data1", "data2", "data3"}; */
   private String[] dataDirs = {"data" + File.separator + "data"};
 
@@ -251,8 +269,16 @@ public class IoTDBConfig {
   /** How many threads can concurrently flush. When <= 0, use CPU core number. */
   private int concurrentFlushThread = Runtime.getRuntime().availableProcessors();
 
-  /** How many threads can concurrently query. When <= 0, use CPU core number. */
-  private int concurrentQueryThread = Runtime.getRuntime().availableProcessors();
+  /** How many threads can concurrently execute query statement. When <= 0, use CPU core number. */
+  private int concurrentQueryThread = 16;
+
+  /**
+   * How many threads can concurrently read data for raw data query. When <= 0, use CPU core number.
+   */
+  private int concurrentSubRawQueryThread = 8;
+
+  /** Blocking queue size for read task in raw data query. */
+  private int rawQueryBlockingQueueCapacity = 5;
 
   /** How many threads can concurrently evaluate windows. When <= 0, use CPU core number. */
   private int concurrentWindowEvaluationThread = Runtime.getRuntime().availableProcessors();
@@ -292,13 +318,11 @@ public class IoTDBConfig {
   /** index directory. */
   private String indexRootFolder = "data" + File.separator + "index";
 
-  /** When a TsFile's file size (in byte) exceed this, the TsFile is forced closed. Unit: byte */
-  private long tsFileSizeThreshold = 1L;
   /** When a unSequence TsFile's file size (in byte) exceed this, the TsFile is forced closed. */
-  private long unSeqTsFileSize = 1L;
+  private long unSeqTsFileSize = 0L;
 
   /** When a sequence TsFile's file size (in byte) exceed this, the TsFile is forced closed. */
-  private long seqTsFileSize = 1L;
+  private long seqTsFileSize = 0L;
 
   /** When a memTable's size (in byte) exceeds this, the memtable is flushed to disk. Unit: byte */
   private long memtableSizeThreshold = 1024 * 1024 * 1024L;
@@ -342,71 +366,87 @@ public class IoTDBConfig {
   /** When average series point number reaches this, flush the memtable to disk */
   private int avgSeriesPointNumberThreshold = 10000;
 
-  /**
-   * Work when tsfile_manage_strategy is level_strategy. When merge point number reaches this, merge
-   * the files to the last level. During a merge, if a chunk with less number of chunks than this
-   * parameter, the chunk will be merged with its succeeding chunks even if it is not overflowed,
-   * until the merged chunks reach this threshold and the new chunk will be flushed.
-   */
-  private int mergeChunkPointNumberThreshold = 100000;
+  /** Enable inner space copaction for sequence files */
+  private boolean enableSeqSpaceCompaction = true;
+
+  /** Enable inner space copaction for unsequence files */
+  private boolean enableUnseqSpaceCompaction = true;
+
+  /** Compact the unsequence files into the overlapped sequence files */
+  private boolean enableCrossSpaceCompaction = true;
 
   /**
-   * Works when the compaction_strategy is LEVEL_COMPACTION. When point number of a page reaches
-   * this, use "append merge" instead of "deserialize merge".
+   * The strategy of inner space compaction task. There are just one inner space compaction strategy
+   * SIZE_TIRED_COMPACTION:
    */
-  private int mergePagePointNumberThreshold = 100;
-
-  /** LEVEL_COMPACTION, NO_COMPACTION */
-  private CompactionStrategy compactionStrategy = CompactionStrategy.LEVEL_COMPACTION;
+  private InnerCompactionStrategy innerCompactionStrategy =
+      InnerCompactionStrategy.SIZE_TIERED_COMPACTION;
 
   /**
-   * Works when the compaction_strategy is LEVEL_COMPACTION. Whether to merge unseq files into seq
-   * files or not.
+   * The strategy of cross space compaction task. There are just one cross space compaction strategy
+   * SIZE_TIRED_COMPACTION:
    */
-  private boolean enableUnseqCompaction = true;
+  private CrossCompactionStrategy crossCompactionStrategy =
+      CrossCompactionStrategy.REWRITE_COMPACTION;
 
   /**
-   * Works when the compaction_strategy is LEVEL_COMPACTION. Whether to start next compaction task
-   * automatically after finish one compaction task
+   * The priority of compaction task execution. There are three priority strategy INNER_CROSS:
+   * prioritize inner space compaction, reduce the number of files first CROSS INNER: prioritize
+   * cross space compaction, eliminate the unsequence files first BALANCE: alternate two compaction
+   * types
    */
-  private boolean enableContinuousCompaction = true;
+  private CompactionPriority compactionPriority = CompactionPriority.BALANCE;
+
+  /** The target tsfile size in compaction, 1 GB by default */
+  private long targetCompactionFileSize = 1073741824L;
+
+  /** The target chunk size in compaction. */
+  private long targetChunkSize = 1048576L;
+
+  /** The target chunk point num in compaction. */
+  private long targetChunkPointNum = 100000L;
 
   /**
-   * Works when the compaction_strategy is LEVEL_COMPACTION. The max seq file num of each level.
-   * When the num of files in one level exceeds this, the files in this level will merge to one and
-   * put to upper level.
+   * If the chunk size is lower than this threshold, it will be deserialized into points, default is
+   * 1 KB
    */
-  private int seqFileNumInEachLevel = 6;
-
-  /** Works when the compaction_strategy is LEVEL_COMPACTION. The max num of seq level. */
-  private int seqLevelNum = 3;
+  private long chunkSizeLowerBoundInCompaction = 1024L;
 
   /**
-   * Works when compaction_strategy is LEVEL_COMPACTION. The max ujseq file num of each level. When
-   * the num of files in one level exceeds this, the files in this level will merge to one and put
-   * to upper level.
+   * If the chunk point num is lower than this threshold, it will be deserialized into points,
+   * default is 100
    */
-  private int unseqFileNumInEachLevel = 10;
-
-  /** Works when the compaction_strategy is LEVEL_COMPACTION. The max num of unseq level. */
-  private int unseqLevelNum = 1;
+  private long chunkPointNumLowerBoundInCompaction = 100;
 
   /**
-   * Works when compaction_strategy is LEVEL_COMPACTION. The max open file num in each unseq
-   * compaction task. We use the unseq file num as the open file num # This parameters have to be
-   * much smaller than the permitted max open file num of each process controlled by operator
-   * system(65535 in most system).
+   * If compaction thread cannot acquire the write lock within this timeout, the compaction task
+   * will be abort.
    */
-  private int maxOpenFileNumInEachUnseqCompaction = 2000;
+  private long compactionAcquireWriteLockTimeout = 60_000L;
+
+  /** The max candidate file num in inner space compaction */
+  private int maxInnerCompactionCandidateFileNum = 30;
+
+  /** The max candidate file num in cross space compaction */
+  private int maxCrossCompactionCandidateFileNum = 1000;
+
+  /** The interval of compaction task schedulation in each virtual storage group. The unit is ms. */
+  private long compactionScheduleIntervalInMs = 60_000L;
+
+  /** The interval of compaction task submission from queue in CompactionTaskMananger */
+  private long compactionSubmissionIntervalInMs = 60_000L;
 
   /** whether to cache meta data(ChunkMetaData and TsFileMetaData) or not. */
   private boolean metaDataCacheEnable = true;
 
+  /** Memory allocated for bloomFilter cache in read process */
+  private long allocateMemoryForBloomFilterCache = allocateMemoryForRead / 1001;
+
   /** Memory allocated for timeSeriesMetaData cache in read process */
-  private long allocateMemoryForTimeSeriesMetaDataCache = allocateMemoryForRead / 5;
+  private long allocateMemoryForTimeSeriesMetaDataCache = allocateMemoryForRead * 200 / 1001;
 
   /** Memory allocated for chunk cache in read process */
-  private long allocateMemoryForChunkCache = allocateMemoryForRead / 10;
+  private long allocateMemoryForChunkCache = allocateMemoryForRead * 100 / 1001;
 
   /** Whether to enable Last cache */
   private boolean lastCacheEnable = true;
@@ -417,10 +457,10 @@ public class IoTDBConfig {
   /** Set true to enable writing monitor time series. */
   private boolean enableMonitorSeriesWrite = false;
 
-  /** Cache size of {@code checkAndGetDataTypeCache} in {@link MManager}. */
-  private int mManagerCacheSize = 300000;
+  /** Cache size of {@code checkAndGetDataTypeCache} in {@link LocalSchemaProcessor}. */
+  private int schemaRegionCacheSize = 10000;
 
-  /** Cache size of {@code checkAndGetDataTypeCache} in {@link MManager}. */
+  /** Cache size of {@code checkAndGetDataTypeCache} in {@link LocalSchemaProcessor}. */
   private int mRemoteSchemaCacheSize = 100000;
 
   /** Is external sort enable. */
@@ -457,14 +497,11 @@ public class IoTDBConfig {
   /** Replace implementation class of JDBC service */
   private String rpcImplClassName = TSServiceImpl.class.getName();
 
+  /** Replace implementation class of influxdb protocol service */
+  private String influxdbImplClassName = InfluxDBServiceImpl.class.getName();
+
   /** Is stat performance of sub-module enable. */
   private boolean enablePerformanceStat = false;
-
-  /** The display of stat performance interval in ms. Unit: millisecond */
-  private long performanceStatDisplayInterval = 60000;
-
-  /** The memory used for stat performance. Unit: kilobyte */
-  private int performanceStatMemoryInKB = 20;
 
   /** whether use chunkBufferPool. */
   private boolean chunkBufferPoolEnable = false;
@@ -527,7 +564,7 @@ public class IoTDBConfig {
   private TSEncoding defaultTextEncoding = TSEncoding.PLAIN;
 
   /** How much memory (in byte) can be used by a single merge task. */
-  private long mergeMemoryBudget = (long) (Runtime.getRuntime().maxMemory() * 0.1);
+  private long crossCompactionMemoryBudget = (long) (Runtime.getRuntime().maxMemory() * 0.1);
 
   /** How many threads will be set up to perform upgrade tasks. */
   private int upgradeThreadNum = 1;
@@ -535,25 +572,12 @@ public class IoTDBConfig {
   /** How many threads will be set up to perform settle tasks. */
   private int settleThreadNum = 1;
 
-  /** How many threads will be set up to perform main merge tasks. */
-  private int mergeThreadNum = 1;
-
-  /** How many threads will be set up to perform unseq merge chunk sub-tasks. */
-  private int mergeChunkSubThreadNum = 4;
-
   /**
    * If one merge file selection runs for more than this time, it will be ended and its current
    * selection will be used as final selection. When < 0, it means time is unbounded. Unit:
    * millisecond
    */
-  private long mergeFileSelectionTimeBudget = 30 * 1000L;
-
-  /**
-   * When set to true, if some crashed merges are detected during system rebooting, such merges will
-   * be continued, otherwise, the unfinished parts of such merges will not be continued while the
-   * finished parts still remain as they are.
-   */
-  private boolean continueMergeAfterReboot = false;
+  private long crossCompactionFileSelectionTimeBudget = 30 * 1000L;
 
   /**
    * A global merge will be performed each such interval, that is, each storage group will be merged
@@ -561,21 +585,14 @@ public class IoTDBConfig {
    */
   private long mergeIntervalSec = 0L;
 
-  /**
-   * When set to true, all unseq merges becomes full merge (the whole SeqFiles are re-written
-   * despite how much they are overflowed). This may increase merge overhead depending on how much
-   * the SeqFiles are overflowed.
-   */
-  private boolean forceFullMerge = true;
-
   /** The limit of compaction merge can reach per second */
-  private int mergeWriteThroughputMbPerSec = 8;
+  private int compactionWriteThroughputMbPerSec = 16;
 
   /**
    * How many thread will be set up to perform compaction, 10 by default. Set to 1 when less than or
    * equal to 0.
    */
-  private int compactionThreadNum = 10;
+  private int concurrentCompactionThread = 10;
 
   /*
    * How many thread will be set up to perform continuous queries. When <= 0, use max(1, CPU core number / 2).
@@ -596,12 +613,25 @@ public class IoTDBConfig {
   private long continuousQueryMinimumEveryInterval = 1000;
 
   /**
+   * The size of log buffer for every CQ management operation plan. If the size of a CQ management
+   * operation plan is larger than this parameter, the CQ management operation plan will be rejected
+   * by CQManager. Unit: byte
+   */
+  private int cqlogBufferSize = 1024 * 1024;
+
+  /**
    * The maximum number of rows can be processed in insert-tablet-plan when executing select-into
    * statements.
    */
   private int selectIntoInsertTabletPlanRowLimit = 10000;
 
-  private MergeFileStrategy mergeFileStrategy = MergeFileStrategy.MAX_SERIES_NUM;
+  /**
+   * When the insert plan column count reaches the specified threshold, which means that the plan is
+   * relatively large. At this time, may be enabled multithreading. If the tablet is small, the time
+   * of each insertion is short. If we enable multithreading, we also need to consider the switching
+   * loss between threads, so we need to judge the size of the tablet.
+   */
+  private int insertMultiTabletEnableMultithreadingColumnThreshold = 10;
 
   /** Default system file storage is in local file system (unsupported) */
   private FSType systemFileStorageFs = FSType.LOCAL;
@@ -647,7 +677,7 @@ public class IoTDBConfig {
   private String kerberosPrincipal = "your principal";
 
   /** the num of memtable in each storage group */
-  private int concurrentWritingTimePartition = 500;
+  private int concurrentWritingTimePartition = 1;
 
   /** the default fill interval in LinearFill and PreviousFill, -1 means infinite past time */
   private int defaultFillInterval = -1;
@@ -665,18 +695,6 @@ public class IoTDBConfig {
 
   /** whether enable data partition. If disabled, all data belongs to partition 0 */
   private boolean enablePartition = false;
-
-  /** whether enable MTree snapshot */
-  private boolean enableMTreeSnapshot = false;
-
-  /** Interval line number of mlog.txt when creating a checkpoint and saving snapshot of mtree */
-  private int mtreeSnapshotInterval = 100000;
-
-  /**
-   * Threshold interval time of MTree modification. If the last modification time is less than this
-   * threshold, MTree snapshot will not be created. Default: 1 hour(3600 seconds) Unit: second
-   */
-  private int mtreeSnapshotThresholdTime = 3600;
 
   /**
    * Time range for partitioning data inside each storage group, the unit is second. Default time is
@@ -734,11 +752,14 @@ public class IoTDBConfig {
 
   private float udfCollectorMemoryBudgetInMB = (float) (1.0 / 3 * udfMemoryBudgetInMB);
 
+  /** The cached record size (in MB) of each series in group by fill query */
+  private float groupByFillCacheSizeInMB = (float) 1.0;
+
   // time in nanosecond precision when starting up
   private long startUpNanosecond = System.nanoTime();
 
   /** Unit: byte */
-  private int thriftMaxFrameSize = 67108864;
+  private int thriftMaxFrameSize = 536870912;
 
   private int thriftDefaultBufferSize = RpcUtils.THRIFT_DEFAULT_BUF_CAPACITY;
 
@@ -754,18 +775,65 @@ public class IoTDBConfig {
    */
   private boolean enableRpcService = true;
 
+  /**
+   * whether enable the influxdb rpc service. This parameter has no a corresponding field in the
+   * iotdb-engine.properties
+   */
+  private boolean enableInfluxDBRpcService = false;
+
   /** the size of ioTaskQueue */
   private int ioTaskQueueSizeForFlushing = 10;
 
   /** the number of virtual storage groups per user-defined storage group */
   private int virtualStorageGroupNum = 1;
 
+  /** the interval to log recover progress of each vsg when starting iotdb */
+  private long recoveryLogIntervalInMs = 5_000L;
+
   private String adminName = "root";
 
   private String adminPassword = "root";
 
+  /** the method to transform device path to device id, can be 'Plain' or 'SHA256' */
+  private String deviceIDTransformationMethod = "Plain";
+
+  /** whether to use id table. ATTENTION: id table is not compatible with alias */
+  private boolean enableIDTable = false;
+
+  /**
+   * whether create mapping file of id table. This file can map device id in tsfile to device path
+   */
+  private boolean enableIDTableLogFile = false;
+
+  /** Encryption provider class */
+  private String encryptDecryptProvider =
+      "org.apache.iotdb.db.security.encrypt.MessageDigestEncrypt";
+
+  /** Encryption provided class parameter */
+  private String encryptDecryptProviderParameter;
+
+  /**
+   * Ip and port of config nodes. each one is a {internalIp | domain name}:{meta port} string tuple.
+   */
+  private List<String> configNodeUrls;
+
+  /** Internal ip for data node */
+  private String internalIp;
+
+  /** Internal port of data node */
+  private int internalPort = 9003;
+
+  /** The max time of data node waiting to join into the cluster */
+  private long joinClusterTimeOutMs = TimeUnit.SECONDS.toMillis(60);
+
   public IoTDBConfig() {
-    // empty constructor
+    try {
+      internalIp = InetAddress.getLocalHost().getHostAddress();
+    } catch (UnknownHostException e) {
+      logger.error(e.getMessage());
+      internalIp = "127.0.0.1";
+    }
+    configNodeUrls = new ArrayList<>();
   }
 
   public float getUdfMemoryBudgetInMB() {
@@ -774,6 +842,14 @@ public class IoTDBConfig {
 
   public void setUdfMemoryBudgetInMB(float udfMemoryBudgetInMB) {
     this.udfMemoryBudgetInMB = udfMemoryBudgetInMB;
+  }
+
+  public float getGroupByFillCacheSizeInMB() {
+    return groupByFillCacheSizeInMB;
+  }
+
+  public void setGroupByFillCacheSizeInMB(float groupByFillCacheSizeInMB) {
+    this.groupByFillCacheSizeInMB = groupByFillCacheSizeInMB;
   }
 
   public float getUdfReaderMemoryBudgetInMB() {
@@ -833,30 +909,6 @@ public class IoTDBConfig {
     this.enablePartition = enablePartition;
   }
 
-  public boolean isEnableMTreeSnapshot() {
-    return enableMTreeSnapshot;
-  }
-
-  public void setEnableMTreeSnapshot(boolean enableMTreeSnapshot) {
-    this.enableMTreeSnapshot = enableMTreeSnapshot;
-  }
-
-  public int getMtreeSnapshotInterval() {
-    return mtreeSnapshotInterval;
-  }
-
-  public void setMtreeSnapshotInterval(int mtreeSnapshotInterval) {
-    this.mtreeSnapshotInterval = mtreeSnapshotInterval;
-  }
-
-  public int getMtreeSnapshotThresholdTime() {
-    return mtreeSnapshotThresholdTime;
-  }
-
-  public void setMtreeSnapshotThresholdTime(int mtreeSnapshotThresholdTime) {
-    this.mtreeSnapshotThresholdTime = mtreeSnapshotThresholdTime;
-  }
-
   public long getPartitionInterval() {
     return partitionInterval;
   }
@@ -889,6 +941,7 @@ public class IoTDBConfig {
     extDir = addHomeDir(extDir);
     udfDir = addHomeDir(udfDir);
     triggerDir = addHomeDir(triggerDir);
+    mqttDir = addHomeDir(mqttDir);
 
     if (TSFileDescriptor.getInstance().getConfig().getTSFileStorageFs().equals(FSType.HDFS)) {
       String hdfsDir = getHdfsDir();
@@ -965,22 +1018,6 @@ public class IoTDBConfig {
     return dataDirs;
   }
 
-  public int getMetricsPort() {
-    return metricsPort;
-  }
-
-  void setMetricsPort(int metricsPort) {
-    this.metricsPort = metricsPort;
-  }
-
-  public boolean isEnableMetricService() {
-    return enableMetricService;
-  }
-
-  public void setEnableMetricService(boolean enableMetricService) {
-    this.enableMetricService = enableMetricService;
-  }
-
   void setDataDirs(String[] dataDirs) {
     this.dataDirs = dataDirs;
   }
@@ -1001,14 +1038,22 @@ public class IoTDBConfig {
     this.rpcPort = rpcPort;
   }
 
+  public int getInfluxDBRpcPort() {
+    return influxDBRpcPort;
+  }
+
+  public void setInfluxDBRpcPort(int influxDBRpcPort) {
+    this.influxDBRpcPort = influxDBRpcPort;
+  }
+
   public String getTimestampPrecision() {
     return timestampPrecision;
   }
 
   public void setTimestampPrecision(String timestampPrecision) {
-    if (!(timestampPrecision.equals("ms")
-        || timestampPrecision.equals("us")
-        || timestampPrecision.equals("ns"))) {
+    if (!("ms".equals(timestampPrecision)
+        || "us".equals(timestampPrecision)
+        || "ns".equals(timestampPrecision))) {
       logger.error(
           "Wrong timestamp precision, please set as: ms, us or ns ! Current is: "
               + timestampPrecision);
@@ -1121,6 +1166,14 @@ public class IoTDBConfig {
     this.triggerDir = triggerDir;
   }
 
+  public String getMqttDir() {
+    return mqttDir;
+  }
+
+  public void setMqttDir(String mqttDir) {
+    this.mqttDir = mqttDir;
+  }
+
   public String getMultiDirStrategyClassName() {
     return multiDirStrategyClassName;
   }
@@ -1157,8 +1210,24 @@ public class IoTDBConfig {
     return concurrentQueryThread;
   }
 
-  void setConcurrentQueryThread(int concurrentQueryThread) {
+  public void setConcurrentQueryThread(int concurrentQueryThread) {
     this.concurrentQueryThread = concurrentQueryThread;
+  }
+
+  public int getConcurrentSubRawQueryThread() {
+    return concurrentSubRawQueryThread;
+  }
+
+  void setConcurrentSubRawQueryThread(int concurrentSubRawQueryThread) {
+    this.concurrentSubRawQueryThread = concurrentSubRawQueryThread;
+  }
+
+  public int getRawQueryBlockingQueueCapacity() {
+    return rawQueryBlockingQueueCapacity;
+  }
+
+  public void setRawQueryBlockingQueueCapacity(int rawQueryBlockingQueueCapacity) {
+    this.rawQueryBlockingQueueCapacity = rawQueryBlockingQueueCapacity;
   }
 
   public int getConcurrentWindowEvaluationThread() {
@@ -1193,22 +1262,6 @@ public class IoTDBConfig {
     this.unSeqTsFileSize = unSeqTsFileSize;
   }
 
-  public boolean isEnableStatMonitor() {
-    return enableStatMonitor;
-  }
-
-  public void setEnableStatMonitor(boolean enableStatMonitor) {
-    this.enableStatMonitor = enableStatMonitor;
-  }
-
-  public boolean isEnableMonitorSeriesWrite() {
-    return enableMonitorSeriesWrite;
-  }
-
-  public void setEnableMonitorSeriesWrite(boolean enableMonitorSeriesWrite) {
-    this.enableMonitorSeriesWrite = enableMonitorSeriesWrite;
-  }
-
   public int getRpcMaxConcurrentClientNum() {
     return rpcMaxConcurrentClientNum;
   }
@@ -1217,12 +1270,12 @@ public class IoTDBConfig {
     this.rpcMaxConcurrentClientNum = rpcMaxConcurrentClientNum;
   }
 
-  public int getmManagerCacheSize() {
-    return mManagerCacheSize;
+  public int getSchemaRegionCacheSize() {
+    return schemaRegionCacheSize;
   }
 
-  void setmManagerCacheSize(int mManagerCacheSize) {
-    this.mManagerCacheSize = mManagerCacheSize;
+  void setSchemaRegionCacheSize(int schemaRegionCacheSize) {
+    this.schemaRegionCacheSize = schemaRegionCacheSize;
   }
 
   public int getmRemoteSchemaCacheSize() {
@@ -1255,6 +1308,20 @@ public class IoTDBConfig {
 
   void setLanguageVersion(String languageVersion) {
     this.languageVersion = languageVersion;
+  }
+
+  public String getIoTDBVersion() {
+    return IoTDBConstant.VERSION;
+  }
+
+  public String getIoTDBMajorVersion() {
+    return IoTDBConstant.MAJOR_VERSION;
+  }
+
+  public String getIoTDBMajorVersion(String version) {
+    return "UNKNOWN".equals(version)
+        ? "UNKNOWN"
+        : version.split("\\.")[0] + "." + version.split("\\.")[1];
   }
 
   public String getIpWhiteList() {
@@ -1301,6 +1368,10 @@ public class IoTDBConfig {
     return rpcImplClassName;
   }
 
+  public String getInfluxDBImplClassName() {
+    return influxdbImplClassName;
+  }
+
   public void setRpcImplClassName(String rpcImplClassName) {
     this.rpcImplClassName = rpcImplClassName;
   }
@@ -1329,6 +1400,22 @@ public class IoTDBConfig {
     this.walPoolTrimIntervalInMS = walPoolTrimIntervalInMS;
   }
 
+  public long getRegisterBufferSleepIntervalInMs() {
+    return registerBufferSleepIntervalInMs;
+  }
+
+  public void setRegisterBufferSleepIntervalInMs(long registerBufferSleepIntervalInMs) {
+    this.registerBufferSleepIntervalInMs = registerBufferSleepIntervalInMs;
+  }
+
+  public long getRegisterBufferRejectThresholdInMs() {
+    return registerBufferRejectThresholdInMs;
+  }
+
+  public void setRegisterBufferRejectThresholdInMs(long registerBufferRejectThresholdInMs) {
+    this.registerBufferRejectThresholdInMs = registerBufferRejectThresholdInMs;
+  }
+
   public int getEstimatedSeriesSize() {
     return estimatedSeriesSize;
   }
@@ -1345,28 +1432,12 @@ public class IoTDBConfig {
     this.chunkBufferPoolEnable = chunkBufferPoolEnable;
   }
 
-  public long getMergeMemoryBudget() {
-    return mergeMemoryBudget;
+  public long getCrossCompactionMemoryBudget() {
+    return crossCompactionMemoryBudget;
   }
 
-  void setMergeMemoryBudget(long mergeMemoryBudget) {
-    this.mergeMemoryBudget = mergeMemoryBudget;
-  }
-
-  public int getMergeThreadNum() {
-    return mergeThreadNum;
-  }
-
-  void setMergeThreadNum(int mergeThreadNum) {
-    this.mergeThreadNum = mergeThreadNum;
-  }
-
-  public boolean isContinueMergeAfterReboot() {
-    return continueMergeAfterReboot;
-  }
-
-  void setContinueMergeAfterReboot(boolean continueMergeAfterReboot) {
-    this.continueMergeAfterReboot = continueMergeAfterReboot;
+  public void setCrossCompactionMemoryBudget(long crossCompactionMemoryBudget) {
+    this.crossCompactionMemoryBudget = crossCompactionMemoryBudget;
   }
 
   public long getMergeIntervalSec() {
@@ -1473,22 +1544,6 @@ public class IoTDBConfig {
     this.enablePerformanceStat = enablePerformanceStat;
   }
 
-  public long getPerformanceStatDisplayInterval() {
-    return performanceStatDisplayInterval;
-  }
-
-  void setPerformanceStatDisplayInterval(long performanceStatDisplayInterval) {
-    this.performanceStatDisplayInterval = performanceStatDisplayInterval;
-  }
-
-  public int getPerformanceStatMemoryInKB() {
-    return performanceStatMemoryInKB;
-  }
-
-  void setPerformanceStatMemoryInKB(int performanceStatMemoryInKB) {
-    this.performanceStatMemoryInKB = performanceStatMemoryInKB;
-  }
-
   public boolean isEnablePartialInsert() {
     return enablePartialInsert;
   }
@@ -1497,20 +1552,12 @@ public class IoTDBConfig {
     this.enablePartialInsert = enablePartialInsert;
   }
 
-  public boolean isForceFullMerge() {
-    return forceFullMerge;
+  public int getConcurrentCompactionThread() {
+    return concurrentCompactionThread;
   }
 
-  void setForceFullMerge(boolean forceFullMerge) {
-    this.forceFullMerge = forceFullMerge;
-  }
-
-  public int getCompactionThreadNum() {
-    return compactionThreadNum;
-  }
-
-  public void setCompactionThreadNum(int compactionThreadNum) {
-    this.compactionThreadNum = compactionThreadNum;
+  public void setConcurrentCompactionThread(int concurrentCompactionThread) {
+    this.concurrentCompactionThread = concurrentCompactionThread;
   }
 
   public int getContinuousQueryThreadNum() {
@@ -1537,20 +1584,38 @@ public class IoTDBConfig {
     this.continuousQueryMinimumEveryInterval = minimumEveryInterval;
   }
 
-  public int getSelectIntoInsertTabletPlanRowLimit() {
-    return selectIntoInsertTabletPlanRowLimit;
+  public int getCqlogBufferSize() {
+    return cqlogBufferSize;
+  }
+
+  public void setCqlogBufferSize(int cqlogBufferSize) {
+    this.cqlogBufferSize = cqlogBufferSize;
   }
 
   public void setSelectIntoInsertTabletPlanRowLimit(int selectIntoInsertTabletPlanRowLimit) {
     this.selectIntoInsertTabletPlanRowLimit = selectIntoInsertTabletPlanRowLimit;
   }
 
-  public int getMergeWriteThroughputMbPerSec() {
-    return mergeWriteThroughputMbPerSec;
+  public int getSelectIntoInsertTabletPlanRowLimit() {
+    return selectIntoInsertTabletPlanRowLimit;
   }
 
-  public void setMergeWriteThroughputMbPerSec(int mergeWriteThroughputMbPerSec) {
-    this.mergeWriteThroughputMbPerSec = mergeWriteThroughputMbPerSec;
+  public int getInsertMultiTabletEnableMultithreadingColumnThreshold() {
+    return insertMultiTabletEnableMultithreadingColumnThreshold;
+  }
+
+  public void setInsertMultiTabletEnableMultithreadingColumnThreshold(
+      int insertMultiTabletEnableMultithreadingColumnThreshold) {
+    this.insertMultiTabletEnableMultithreadingColumnThreshold =
+        insertMultiTabletEnableMultithreadingColumnThreshold;
+  }
+
+  public int getCompactionWriteThroughputMbPerSec() {
+    return compactionWriteThroughputMbPerSec;
+  }
+
+  public void setCompactionWriteThroughputMbPerSec(int compactionWriteThroughputMbPerSec) {
+    this.compactionWriteThroughputMbPerSec = compactionWriteThroughputMbPerSec;
   }
 
   public boolean isEnableMemControl() {
@@ -1649,108 +1714,12 @@ public class IoTDBConfig {
     this.avgSeriesPointNumberThreshold = avgSeriesPointNumberThreshold;
   }
 
-  public int getMergeChunkPointNumberThreshold() {
-    return mergeChunkPointNumberThreshold;
+  public long getCrossCompactionFileSelectionTimeBudget() {
+    return crossCompactionFileSelectionTimeBudget;
   }
 
-  public void setMergeChunkPointNumberThreshold(int mergeChunkPointNumberThreshold) {
-    this.mergeChunkPointNumberThreshold = mergeChunkPointNumberThreshold;
-  }
-
-  public int getMergePagePointNumberThreshold() {
-    return mergePagePointNumberThreshold;
-  }
-
-  public void setMergePagePointNumberThreshold(int mergePagePointNumberThreshold) {
-    this.mergePagePointNumberThreshold = mergePagePointNumberThreshold;
-  }
-
-  public MergeFileStrategy getMergeFileStrategy() {
-    return mergeFileStrategy;
-  }
-
-  public void setMergeFileStrategy(MergeFileStrategy mergeFileStrategy) {
-    this.mergeFileStrategy = mergeFileStrategy;
-  }
-
-  public CompactionStrategy getCompactionStrategy() {
-    return compactionStrategy;
-  }
-
-  public void setCompactionStrategy(CompactionStrategy compactionStrategy) {
-    this.compactionStrategy = compactionStrategy;
-  }
-
-  public boolean isEnableUnseqCompaction() {
-    return enableUnseqCompaction;
-  }
-
-  public void setEnableUnseqCompaction(boolean enableUnseqCompaction) {
-    this.enableUnseqCompaction = enableUnseqCompaction;
-  }
-
-  public boolean isEnableContinuousCompaction() {
-    return enableContinuousCompaction;
-  }
-
-  public void setEnableContinuousCompaction(boolean enableContinuousCompaction) {
-    this.enableContinuousCompaction = enableContinuousCompaction;
-  }
-
-  public int getSeqFileNumInEachLevel() {
-    return seqFileNumInEachLevel;
-  }
-
-  public void setSeqFileNumInEachLevel(int seqFileNumInEachLevel) {
-    this.seqFileNumInEachLevel = seqFileNumInEachLevel;
-  }
-
-  public int getSeqLevelNum() {
-    return seqLevelNum;
-  }
-
-  public void setSeqLevelNum(int seqLevelNum) {
-    this.seqLevelNum = seqLevelNum;
-  }
-
-  public int getUnseqFileNumInEachLevel() {
-    return unseqFileNumInEachLevel;
-  }
-
-  public void setUnseqFileNumInEachLevel(int unseqFileNumInEachLevel) {
-    this.unseqFileNumInEachLevel = unseqFileNumInEachLevel;
-  }
-
-  public int getUnseqLevelNum() {
-    return unseqLevelNum;
-  }
-
-  public void setUnseqLevelNum(int unseqLevelNum) {
-    this.unseqLevelNum = unseqLevelNum;
-  }
-
-  public int getMaxOpenFileNumInEachUnseqCompaction() {
-    return maxOpenFileNumInEachUnseqCompaction;
-  }
-
-  public void setMaxOpenFileNumInEachUnseqCompaction(int maxOpenFileNumInEachUnseqCompaction) {
-    this.maxOpenFileNumInEachUnseqCompaction = maxOpenFileNumInEachUnseqCompaction;
-  }
-
-  public int getMergeChunkSubThreadNum() {
-    return mergeChunkSubThreadNum;
-  }
-
-  void setMergeChunkSubThreadNum(int mergeChunkSubThreadNum) {
-    this.mergeChunkSubThreadNum = mergeChunkSubThreadNum;
-  }
-
-  public long getMergeFileSelectionTimeBudget() {
-    return mergeFileSelectionTimeBudget;
-  }
-
-  void setMergeFileSelectionTimeBudget(long mergeFileSelectionTimeBudget) {
-    this.mergeFileSelectionTimeBudget = mergeFileSelectionTimeBudget;
+  void setCrossCompactionFileSelectionTimeBudget(long crossCompactionFileSelectionTimeBudget) {
+    this.crossCompactionFileSelectionTimeBudget = crossCompactionFileSelectionTimeBudget;
   }
 
   public boolean isRpcThriftCompressionEnable() {
@@ -1767,6 +1736,14 @@ public class IoTDBConfig {
 
   public void setMetaDataCacheEnable(boolean metaDataCacheEnable) {
     this.metaDataCacheEnable = metaDataCacheEnable;
+  }
+
+  public long getAllocateMemoryForBloomFilterCache() {
+    return allocateMemoryForBloomFilterCache;
+  }
+
+  public void setAllocateMemoryForBloomFilterCache(long allocateMemoryForBloomFilterCache) {
+    this.allocateMemoryForBloomFilterCache = allocateMemoryForBloomFilterCache;
   }
 
   public long getAllocateMemoryForTimeSeriesMetaDataCache() {
@@ -2131,14 +2108,6 @@ public class IoTDBConfig {
     this.thriftServerAwaitTimeForStopService = thriftServerAwaitTimeForStopService;
   }
 
-  public int getQueryCacheSizeInMetric() {
-    return queryCacheSizeInMetric;
-  }
-
-  public void setQueryCacheSizeInMetric(int queryCacheSizeInMetric) {
-    this.queryCacheSizeInMetric = queryCacheSizeInMetric;
-  }
-
   public boolean isEnableMQTTService() {
     return enableMQTTService;
   }
@@ -2337,6 +2306,14 @@ public class IoTDBConfig {
     this.virtualStorageGroupNum = virtualStorageGroupNum;
   }
 
+  public long getRecoveryLogIntervalInMs() {
+    return recoveryLogIntervalInMs;
+  }
+
+  public void setRecoveryLogIntervalInMs(long recoveryLogIntervalInMs) {
+    this.recoveryLogIntervalInMs = recoveryLogIntervalInMs;
+  }
+
   public boolean isRpcAdvancedCompressionEnable() {
     return rpcAdvancedCompressionEnable;
   }
@@ -2354,6 +2331,14 @@ public class IoTDBConfig {
     this.mlogBufferSize = mlogBufferSize;
   }
 
+  public long getSyncMlogPeriodInMs() {
+    return syncMlogPeriodInMs;
+  }
+
+  public void setSyncMlogPeriodInMs(long syncMlogPeriodInMs) {
+    this.syncMlogPeriodInMs = syncMlogPeriodInMs;
+  }
+
   public int getTlogBufferSize() {
     return tlogBufferSize;
   }
@@ -2368,6 +2353,14 @@ public class IoTDBConfig {
 
   public void setEnableRpcService(boolean enableRpcService) {
     this.enableRpcService = enableRpcService;
+  }
+
+  public boolean isEnableInfluxDBRpcService() {
+    return enableInfluxDBRpcService;
+  }
+
+  public void setEnableInfluxDBRpcService(boolean enableInfluxDBRpcService) {
+    this.enableInfluxDBRpcService = enableInfluxDBRpcService;
   }
 
   public int getIoTaskQueueSizeForFlushing() {
@@ -2392,5 +2385,205 @@ public class IoTDBConfig {
 
   public void setAdminPassword(String adminPassword) {
     this.adminPassword = adminPassword;
+  }
+
+  public boolean isEnableSeqSpaceCompaction() {
+    return enableSeqSpaceCompaction;
+  }
+
+  public void setEnableSeqSpaceCompaction(boolean enableSeqSpaceCompaction) {
+    this.enableSeqSpaceCompaction = enableSeqSpaceCompaction;
+  }
+
+  public boolean isEnableUnseqSpaceCompaction() {
+    return enableUnseqSpaceCompaction;
+  }
+
+  public void setEnableUnseqSpaceCompaction(boolean enableUnseqSpaceCompaction) {
+    this.enableUnseqSpaceCompaction = enableUnseqSpaceCompaction;
+  }
+
+  public boolean isEnableCrossSpaceCompaction() {
+    return enableCrossSpaceCompaction;
+  }
+
+  public void setEnableCrossSpaceCompaction(boolean enableCrossSpaceCompaction) {
+    this.enableCrossSpaceCompaction = enableCrossSpaceCompaction;
+  }
+
+  public InnerCompactionStrategy getInnerCompactionStrategy() {
+    return innerCompactionStrategy;
+  }
+
+  public void setInnerCompactionStrategy(InnerCompactionStrategy innerCompactionStrategy) {
+    this.innerCompactionStrategy = innerCompactionStrategy;
+  }
+
+  public CrossCompactionStrategy getCrossCompactionStrategy() {
+    return crossCompactionStrategy;
+  }
+
+  public void setCrossCompactionStrategy(CrossCompactionStrategy crossCompactionStrategy) {
+    this.crossCompactionStrategy = crossCompactionStrategy;
+  }
+
+  public CompactionPriority getCompactionPriority() {
+    return compactionPriority;
+  }
+
+  public void setCompactionPriority(CompactionPriority compactionPriority) {
+    this.compactionPriority = compactionPriority;
+  }
+
+  public long getTargetCompactionFileSize() {
+    return targetCompactionFileSize;
+  }
+
+  public void setTargetCompactionFileSize(long targetCompactionFileSize) {
+    this.targetCompactionFileSize = targetCompactionFileSize;
+  }
+
+  public long getTargetChunkSize() {
+    return targetChunkSize;
+  }
+
+  public void setTargetChunkSize(long targetChunkSize) {
+    this.targetChunkSize = targetChunkSize;
+  }
+
+  public long getChunkSizeLowerBoundInCompaction() {
+    return chunkSizeLowerBoundInCompaction;
+  }
+
+  public void setChunkSizeLowerBoundInCompaction(long chunkSizeLowerBoundInCompaction) {
+    this.chunkSizeLowerBoundInCompaction = chunkSizeLowerBoundInCompaction;
+  }
+
+  public long getTargetChunkPointNum() {
+    return targetChunkPointNum;
+  }
+
+  public void setTargetChunkPointNum(long targetChunkPointNum) {
+    this.targetChunkPointNum = targetChunkPointNum;
+  }
+
+  public long getChunkPointNumLowerBoundInCompaction() {
+    return chunkPointNumLowerBoundInCompaction;
+  }
+
+  public void setChunkPointNumLowerBoundInCompaction(long chunkPointNumLowerBoundInCompaction) {
+    this.chunkPointNumLowerBoundInCompaction = chunkPointNumLowerBoundInCompaction;
+  }
+
+  public long getCompactionAcquireWriteLockTimeout() {
+    return compactionAcquireWriteLockTimeout;
+  }
+
+  public void setCompactionAcquireWriteLockTimeout(long compactionAcquireWriteLockTimeout) {
+    this.compactionAcquireWriteLockTimeout = compactionAcquireWriteLockTimeout;
+  }
+
+  public long getCompactionScheduleIntervalInMs() {
+    return compactionScheduleIntervalInMs;
+  }
+
+  public void setCompactionScheduleIntervalInMs(long compactionScheduleIntervalInMs) {
+    this.compactionScheduleIntervalInMs = compactionScheduleIntervalInMs;
+  }
+
+  public int getMaxInnerCompactionCandidateFileNum() {
+    return maxInnerCompactionCandidateFileNum;
+  }
+
+  public void setMaxInnerCompactionCandidateFileNum(int maxInnerCompactionCandidateFileNum) {
+    this.maxInnerCompactionCandidateFileNum = maxInnerCompactionCandidateFileNum;
+  }
+
+  public int getMaxCrossCompactionCandidateFileNum() {
+    return maxCrossCompactionCandidateFileNum;
+  }
+
+  public void setMaxCrossCompactionCandidateFileNum(int maxCrossCompactionCandidateFileNum) {
+    this.maxCrossCompactionCandidateFileNum = maxCrossCompactionCandidateFileNum;
+  }
+
+  public long getCompactionSubmissionIntervalInMs() {
+    return compactionSubmissionIntervalInMs;
+  }
+
+  public void setCompactionSubmissionIntervalInMs(long interval) {
+    compactionSubmissionIntervalInMs = interval;
+  }
+
+  public String getDeviceIDTransformationMethod() {
+    return deviceIDTransformationMethod;
+  }
+
+  public void setDeviceIDTransformationMethod(String deviceIDTransformationMethod) {
+    this.deviceIDTransformationMethod = deviceIDTransformationMethod;
+  }
+
+  public boolean isEnableIDTable() {
+    return enableIDTable;
+  }
+
+  public void setEnableIDTable(boolean enableIDTable) {
+    this.enableIDTable = enableIDTable;
+  }
+
+  public boolean isEnableIDTableLogFile() {
+    return enableIDTableLogFile;
+  }
+
+  public void setEnableIDTableLogFile(boolean enableIDTableLogFile) {
+    this.enableIDTableLogFile = enableIDTableLogFile;
+  }
+
+  public String getEncryptDecryptProvider() {
+    return encryptDecryptProvider;
+  }
+
+  public void setEncryptDecryptProvider(String encryptDecryptProvider) {
+    this.encryptDecryptProvider = encryptDecryptProvider;
+  }
+
+  public String getEncryptDecryptProviderParameter() {
+    return encryptDecryptProviderParameter;
+  }
+
+  public void setEncryptDecryptProviderParameter(String encryptDecryptProviderParameter) {
+    this.encryptDecryptProviderParameter = encryptDecryptProviderParameter;
+  }
+
+  public List<String> getConfigNodeUrls() {
+    return configNodeUrls;
+  }
+
+  public void setConfigNodeUrls(List<String> configNodeUrls) {
+    this.configNodeUrls = configNodeUrls;
+  }
+
+  public String getInternalIp() {
+    return internalIp;
+  }
+
+  public void setInternalIp(String internalIp) {
+    this.internalIp = internalIp;
+  }
+
+  public int getInternalPort() {
+    return internalPort;
+  }
+
+  public void setInternalPort(int internalPort) {
+    this.internalPort = internalPort;
+  }
+
+  public long getJoinClusterTimeOutMs() {
+    return joinClusterTimeOutMs;
+  }
+
+  public void setJoinClusterTimeOutMs(long joinClusterTimeOutMs) {
+    this.joinClusterTimeOutMs = joinClusterTimeOutMs;
   }
 }

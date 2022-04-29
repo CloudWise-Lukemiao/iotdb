@@ -21,9 +21,14 @@ package org.apache.iotdb.db.query.expression.unary;
 
 import org.apache.iotdb.db.exception.query.LogicalOptimizeException;
 import org.apache.iotdb.db.exception.query.QueryProcessException;
-import org.apache.iotdb.db.metadata.PartialPath;
+import org.apache.iotdb.db.exception.sql.StatementAnalyzeException;
+import org.apache.iotdb.db.metadata.path.PartialPath;
+import org.apache.iotdb.db.mpp.common.schematree.PathPatternTree;
+import org.apache.iotdb.db.mpp.sql.planner.plan.node.PlanNodeIdAllocator;
+import org.apache.iotdb.db.mpp.sql.planner.plan.node.source.SeriesScanNode;
+import org.apache.iotdb.db.mpp.sql.planner.plan.node.source.SourceNode;
+import org.apache.iotdb.db.mpp.sql.rewriter.WildcardsRemover;
 import org.apache.iotdb.db.qp.physical.crud.UDTFPlan;
-import org.apache.iotdb.db.qp.utils.WildcardsRemover;
 import org.apache.iotdb.db.query.expression.Expression;
 import org.apache.iotdb.db.query.udf.core.executor.UDTFExecutor;
 import org.apache.iotdb.db.query.udf.core.layer.IntermediateLayer;
@@ -35,6 +40,7 @@ import org.apache.iotdb.db.query.udf.core.reader.LayerPointReader;
 import org.apache.iotdb.tsfile.file.metadata.enums.TSDataType;
 
 import java.time.ZoneId;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -56,6 +62,28 @@ public class TimeSeriesOperand extends Expression {
   }
 
   @Override
+  public boolean isConstantOperandInternal() {
+    return false;
+  }
+
+  @Override
+  public List<Expression> getExpressions() {
+    return Collections.emptyList();
+  }
+
+  @Override
+  public void concat(
+      List<PartialPath> prefixPaths,
+      List<Expression> resultExpressions,
+      PathPatternTree patternTree) {
+    for (PartialPath prefixPath : prefixPaths) {
+      TimeSeriesOperand resultExpression = new TimeSeriesOperand(prefixPath.concatPath(path));
+      patternTree.appendPath(resultExpression.getPath());
+      resultExpressions.add(resultExpression);
+    }
+  }
+
+  @Override
   public void concat(List<PartialPath> prefixPaths, List<Expression> resultExpressions) {
     for (PartialPath prefixPath : prefixPaths) {
       resultExpressions.add(new TimeSeriesOperand(prefixPath.concatPath(path)));
@@ -64,6 +92,16 @@ public class TimeSeriesOperand extends Expression {
 
   @Override
   public void removeWildcards(WildcardsRemover wildcardsRemover, List<Expression> resultExpressions)
+      throws StatementAnalyzeException {
+    for (PartialPath actualPath : wildcardsRemover.removeWildcardInPath(path)) {
+      resultExpressions.add(new TimeSeriesOperand(actualPath));
+    }
+  }
+
+  @Override
+  public void removeWildcards(
+      org.apache.iotdb.db.qp.utils.WildcardsRemover wildcardsRemover,
+      List<Expression> resultExpressions)
       throws LogicalOptimizeException {
     for (PartialPath actualPath : wildcardsRemover.removeWildcardFrom(path)) {
       resultExpressions.add(new TimeSeriesOperand(actualPath));
@@ -73,6 +111,11 @@ public class TimeSeriesOperand extends Expression {
   @Override
   public void collectPaths(Set<PartialPath> pathSet) {
     pathSet.add(path);
+  }
+
+  @Override
+  public void collectPlanNode(Set<SourceNode> planNodeSet) {
+    planNodeSet.add(new SeriesScanNode(PlanNodeIdAllocator.generateId(), path));
   }
 
   @Override
@@ -114,8 +157,7 @@ public class TimeSeriesOperand extends Expression {
     return expressionIntermediateLayerMap.get(this);
   }
 
-  @Override
-  public String toString() {
-    return path.isMeasurementAliasExists() ? path.getFullPathWithAlias() : path.getExactFullPath();
+  public String getExpressionStringInternal() {
+    return path.isMeasurementAliasExists() ? path.getFullPathWithAlias() : path.getFullPath();
   }
 }

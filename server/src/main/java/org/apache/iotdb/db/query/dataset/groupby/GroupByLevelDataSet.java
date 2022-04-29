@@ -20,7 +20,7 @@
 package org.apache.iotdb.db.query.dataset.groupby;
 
 import org.apache.iotdb.db.exception.metadata.IllegalPathException;
-import org.apache.iotdb.db.metadata.PartialPath;
+import org.apache.iotdb.db.metadata.path.PartialPath;
 import org.apache.iotdb.db.qp.physical.crud.GroupByTimePlan;
 import org.apache.iotdb.db.query.aggregation.AggregateResult;
 import org.apache.iotdb.tsfile.read.common.RowRecord;
@@ -41,7 +41,7 @@ public class GroupByLevelDataSet extends QueryDataSet {
   private List<RowRecord> records = new ArrayList<>();
   private int index = 0;
 
-  public GroupByLevelDataSet(GroupByTimePlan plan, GroupByEngineDataSet dataSet)
+  public GroupByLevelDataSet(GroupByTimePlan plan, GroupByTimeEngineDataSet dataSet)
       throws IOException {
     this.paths = new ArrayList<>(plan.getDeduplicatedPaths());
     this.dataTypes = plan.getDeduplicatedDataTypes();
@@ -71,7 +71,8 @@ public class GroupByLevelDataSet extends QueryDataSet {
       if (paths.isEmpty()) {
         for (Map.Entry<String, AggregateResult> entry : groupPathResultMap.entrySet()) {
           try {
-            this.paths.add(new PartialPath(entry.getKey()));
+            String alias = plan.getGroupByLevelController().getAlias(entry.getKey());
+            this.paths.add(new PartialPath(alias != null ? alias : entry.getKey()));
           } catch (IllegalPathException e) {
             logger.error("Query result IllegalPathException occurred: {}.", entry.getKey());
           }
@@ -79,6 +80,10 @@ public class GroupByLevelDataSet extends QueryDataSet {
         }
       }
     }
+    // group by level's column number is different from other datasets
+    // TODO I don't know whether it's right or not in AlignedPath, remember to check here while
+    // adapting GroupByLevel query for new vector
+    super.columnNum = dataTypes.size();
   }
 
   @Override
