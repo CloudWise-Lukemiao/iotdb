@@ -59,7 +59,7 @@ jobs:
           cd grafana-plugin
           go version
           set MY=1111
-          @echo %MY%
+          @echo %MY%=1112
           @echo %GOPATH%
           cd %CHECK_RESULTS%/pkg/mod/github.com/magefile/mage@v1.13.0/bootstrap.go
           dir
