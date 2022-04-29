@@ -58,9 +58,7 @@ jobs:
         run: |
           cd grafana-plugin
           go version
-          set MY=1111
-          @echo %MY%=1112
-          @echo %GOPATH%
+          for /f "delims=" %%i in ( 'ipconfig /all^| find /i "ipv4" ') do set MYIP=%%i & echo %MYIP%
           cd %CHECK_RESULTS%/pkg/mod/github.com/magefile/mage@v1.13.0/bootstrap.go
           dir
           go env -w GOPROXY=https://goproxy.cn
