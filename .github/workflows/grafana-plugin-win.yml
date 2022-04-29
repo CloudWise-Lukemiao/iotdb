@@ -68,5 +68,7 @@ jobs:
           go run bootstrap.go
           dir
           cd D:\a\iotdb\iotdb\grafana-plugin
+          cd C:\Users\runneradmin\go\
+          dir
           C:\Users\runneradmin\go\mage\mage -v
           dir
