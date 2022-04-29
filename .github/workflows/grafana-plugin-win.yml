@@ -58,7 +58,7 @@ jobs:
         run: |
           cd grafana-plugin
           go version
-          for /f "delims=" %%t in ('go env GOPATH') do set CHECK_RESULTS=%%t
+          for /f "delims=" %%t in ('go env GOPATH') do (set CHECK_RESULTS=%%t)
           echo %CHECK_RESULTS%
           cd %CHECK_RESULTS%/pkg/mod/github.com/magefile/mage@v1.13.0/bootstrap.go
           dir
