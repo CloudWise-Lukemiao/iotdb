@@ -62,7 +62,8 @@ jobs:
           go env -w GOPROXY=https://goproxy.cn
           go get -u github.com/grafana/grafana-plugin-sdk-go
           go mod tidy
-          cd C:\Users\runneradmin\go\pkg\mod\github.com\magefile\mage@v1.13.0
-          mage -debug -l
+          cd C:\Users\runneradmin\go
+          git clone https://github.com/magefile/mage
+          dir
           go run bootstrap.go
           mage -v
