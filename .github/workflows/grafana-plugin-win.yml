@@ -58,7 +58,9 @@ jobs:
         run: |
           cd grafana-plugin
           go version
-          echo %GOPATH%
+          set MY=1111
+          @echo %MY%
+          @echo %GOPATH%
           cd %CHECK_RESULTS%/pkg/mod/github.com/magefile/mage@v1.13.0/bootstrap.go
           dir
           go env -w GOPROXY=https://goproxy.cn
