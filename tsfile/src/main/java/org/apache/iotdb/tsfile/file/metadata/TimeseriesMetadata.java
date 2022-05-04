@@ -19,7 +19,6 @@
 
 package org.apache.iotdb.tsfile.file.metadata;
 
-import org.apache.iotdb.tsfile.common.cache.Accountable;
 import org.apache.iotdb.tsfile.file.metadata.enums.TSDataType;
 import org.apache.iotdb.tsfile.file.metadata.statistics.Statistics;
 import org.apache.iotdb.tsfile.read.controller.IChunkMetadataLoader;
@@ -29,19 +28,25 @@ import org.apache.iotdb.tsfile.utils.ReadWriteIOUtils;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
-public class TimeseriesMetadata implements Accountable, ITimeSeriesMetadata {
+public class TimeseriesMetadata implements ITimeSeriesMetadata {
 
   /** used for old version tsfile */
   private long startOffsetOfChunkMetaDataList;
   /**
    * 0 means this time series has only one chunk, no need to save the statistic again in chunk
-   * metadata 1 means this time series has more than one chunk, should save the statistic again in
-   * chunk metadata if the 8th bit is 1, it means it is the time column of a vector series if the
-   * 7th bit is 1, it means it is the value column of a vector series
+   * metadata;
+   *
+   * <p>1 means this time series has more than one chunk, should save the statistic again in chunk
+   * metadata;
+   *
+   * <p>if the 8th bit is 1, it means it is the time column of a vector series;
+   *
+   * <p>if the 7th bit is 1, it means it is the value column of a vector series
    */
   private byte timeSeriesMetadataType;
 
@@ -50,12 +55,12 @@ public class TimeseriesMetadata implements Accountable, ITimeSeriesMetadata {
   private String measurementId;
   private TSDataType dataType;
 
-  private Statistics<?> statistics;
+  private Statistics<? extends Serializable> statistics;
 
   // modified is true when there are modifications of the series, or from unseq file
   private boolean modified;
 
-  protected IChunkMetadataLoader chunkMetadataLoader;
+  private IChunkMetadataLoader chunkMetadataLoader;
 
   private long ramSize;
 
@@ -74,7 +79,7 @@ public class TimeseriesMetadata implements Accountable, ITimeSeriesMetadata {
       int chunkMetaDataListDataSize,
       String measurementId,
       TSDataType dataType,
-      Statistics statistics,
+      Statistics<? extends Serializable> statistics,
       PublicBAOS chunkMetadataListBuffer) {
     this.timeSeriesMetadataType = timeSeriesMetadataType;
     this.chunkMetaDataListDataSize = chunkMetaDataListDataSize;
@@ -178,11 +183,11 @@ public class TimeseriesMetadata implements Accountable, ITimeSeriesMetadata {
   }
 
   @Override
-  public Statistics getStatistics() {
+  public Statistics<? extends Serializable> getStatistics() {
     return statistics;
   }
 
-  public void setStatistics(Statistics statistics) {
+  public void setStatistics(Statistics<? extends Serializable> statistics) {
     this.statistics = statistics;
   }
 
@@ -211,16 +216,6 @@ public class TimeseriesMetadata implements Accountable, ITimeSeriesMetadata {
   @Override
   public void setModified(boolean modified) {
     this.modified = modified;
-  }
-
-  @Override
-  public void setRamSize(long size) {
-    this.ramSize = size;
-  }
-
-  @Override
-  public long getRamSize() {
-    return ramSize;
   }
 
   @Override

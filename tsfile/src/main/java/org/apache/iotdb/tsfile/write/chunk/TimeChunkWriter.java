@@ -19,6 +19,7 @@
 package org.apache.iotdb.tsfile.write.chunk;
 
 import org.apache.iotdb.tsfile.common.conf.TSFileDescriptor;
+import org.apache.iotdb.tsfile.common.constant.TsFileConstant;
 import org.apache.iotdb.tsfile.compress.ICompressor;
 import org.apache.iotdb.tsfile.encoding.encoder.Encoder;
 import org.apache.iotdb.tsfile.file.header.ChunkHeader;
@@ -228,7 +229,7 @@ public class TimeChunkWriter {
         statistics,
         pageBuffer.size(),
         numOfPages,
-        0x80);
+        TsFileConstant.TIME_COLUMN_MASK);
 
     long dataOffset = writer.getPos();
 
@@ -251,5 +252,9 @@ public class TimeChunkWriter {
   /** only used for test */
   public PublicBAOS getPageBuffer() {
     return pageBuffer;
+  }
+
+  public TimePageWriter getPageWriter() {
+    return pageWriter;
   }
 }

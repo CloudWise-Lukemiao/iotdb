@@ -38,14 +38,16 @@ public class ClusterConfig {
   private int internalMetaPort = 9003;
   private int internalDataPort = 40010;
   private int clusterRpcPort = IoTDBDescriptor.getInstance().getConfig().getRpcPort();
+  private int clusterInfoRpcPort = 6567;
 
   /** each one is a {internalIp | domain name}:{meta port} string tuple. */
   private List<String> seedNodeUrls;
 
   @ClusterConsistent private boolean isRpcThriftCompressionEnabled = false;
-  private int maxConcurrentClientNum = 10000;
 
   @ClusterConsistent private int replicationNum = 1;
+
+  @ClusterConsistent private int multiRaftFactor = 1;
 
   @ClusterConsistent private String clusterName = "default";
 
@@ -55,28 +57,38 @@ public class ClusterConfig {
 
   private int connectionTimeoutInMS = (int) TimeUnit.SECONDS.toMillis(20);
 
+  private long heartbeatIntervalMs = TimeUnit.SECONDS.toMillis(1);
+
+  private long electionTimeoutMs = TimeUnit.SECONDS.toMillis(20);
+
   private int readOperationTimeoutMS = (int) TimeUnit.SECONDS.toMillis(30);
 
   private int writeOperationTimeoutMS = (int) TimeUnit.SECONDS.toMillis(30);
 
-  private int catchUpTimeoutMS = (int) TimeUnit.SECONDS.toMillis(60);
+  private int catchUpTimeoutMS = (int) TimeUnit.SECONDS.toMillis(300);
 
   private boolean useBatchInLogCatchUp = true;
 
   /** max number of committed logs to be saved */
-  private int minNumOfLogsInMem = 100;
+  private int minNumOfLogsInMem = 1000;
 
   /** max number of committed logs in memory */
-  private int maxNumOfLogsInMem = 1000;
+  private int maxNumOfLogsInMem = 2000;
 
   /** max memory size of committed logs in memory, default 512M */
   private long maxMemorySizeForRaftLog = 536870912;
+
+  /** Ratio of write memory allocated for raft log */
+  private double RaftLogMemoryProportion = 0.2;
 
   /** deletion check period of the submitted log */
   private int logDeleteCheckIntervalSecond = -1;
 
   /** max number of clients in a ClientPool of a member for one node. */
   private int maxClientPerNodePerMember = 1000;
+
+  /** max number of idle clients in a ClientPool of a member for one node. */
+  private int maxIdleClientPerNodePerMember = 500;
 
   /**
    * If the number of connections created for a node exceeds `max_client_pernode_permember_number`,
@@ -131,6 +143,18 @@ public class ClusterConfig {
   private int maxRaftLogIndexSizeInMemory = 10000;
 
   /**
+   * If leader finds too many uncommitted raft logs, raft group leader will wait for a short period
+   * of time, and then append the raft log
+   */
+  private int UnCommittedRaftLogNumForRejectThreshold = 500;
+
+  /**
+   * If followers find too many committed raft logs have not been applied, followers will reject the
+   * raft log sent by leader
+   */
+  private int UnAppliedRaftLogNumForRejectThreshold = 500;
+
+  /**
    * The maximum size of the raft log saved on disk for each file (in bytes) of each raft group. The
    * default size is 1GB
    */
@@ -146,7 +170,7 @@ public class ClusterConfig {
   /** The maximum number of logs saved on the disk */
   private int maxPersistRaftLogNumberOnDisk = 1_000_000;
 
-  private boolean enableUsePersistLogOnDiskToCatchUp = false;
+  private boolean enableUsePersistLogOnDiskToCatchUp = true;
 
   /**
    * The number of logs read on the disk at one time, which is mainly used to control the memory
@@ -165,6 +189,12 @@ public class ClusterConfig {
    * When consistency level is set to mid, query will fail if the log lag exceeds max_read_log_lag.
    */
   private long maxReadLogLag = 1000L;
+
+  /**
+   * When a follower tries to sync log with the leader, sync will fail if the log Lag exceeds
+   * maxSyncLogLag.
+   */
+  private long maxSyncLogLag = 100000L;
 
   private boolean openServerRpcPort = false;
 
@@ -195,6 +225,14 @@ public class ClusterConfig {
     this.maxClientPerNodePerMember = maxClientPerNodePerMember;
   }
 
+  public int getMaxIdleClientPerNodePerMember() {
+    return maxIdleClientPerNodePerMember;
+  }
+
+  public void setMaxIdleClientPerNodePerMember(int maxIdleClientPerNodePerMember) {
+    this.maxIdleClientPerNodePerMember = maxIdleClientPerNodePerMember;
+  }
+
   public boolean isUseBatchInLogCatchUp() {
     return useBatchInLogCatchUp;
   }
@@ -219,14 +257,6 @@ public class ClusterConfig {
     isRpcThriftCompressionEnabled = rpcThriftCompressionEnabled;
   }
 
-  public int getMaxConcurrentClientNum() {
-    return maxConcurrentClientNum;
-  }
-
-  void setMaxConcurrentClientNum(int maxConcurrentClientNum) {
-    this.maxConcurrentClientNum = maxConcurrentClientNum;
-  }
-
   public List<String> getSeedNodeUrls() {
     return seedNodeUrls;
   }
@@ -241,6 +271,14 @@ public class ClusterConfig {
 
   public void setReplicationNum(int replicationNum) {
     this.replicationNum = replicationNum;
+  }
+
+  public int getMultiRaftFactor() {
+    return multiRaftFactor;
+  }
+
+  public void setMultiRaftFactor(int multiRaftFactor) {
+    this.multiRaftFactor = multiRaftFactor;
   }
 
   void setClusterName(String clusterName) {
@@ -363,6 +401,23 @@ public class ClusterConfig {
     this.maxNumOfLogsInMem = maxNumOfLogsInMem;
   }
 
+  public int getUnCommittedRaftLogNumForRejectThreshold() {
+    return UnCommittedRaftLogNumForRejectThreshold;
+  }
+
+  public void setUnCommittedRaftLogNumForRejectThreshold(
+      int unCommittedRaftLogNumForRejectThreshold) {
+    UnCommittedRaftLogNumForRejectThreshold = unCommittedRaftLogNumForRejectThreshold;
+  }
+
+  public int getUnAppliedRaftLogNumForRejectThreshold() {
+    return UnAppliedRaftLogNumForRejectThreshold;
+  }
+
+  public void setUnAppliedRaftLogNumForRejectThreshold(int unAppliedRaftLogNumForRejectThreshold) {
+    UnAppliedRaftLogNumForRejectThreshold = unAppliedRaftLogNumForRejectThreshold;
+  }
+
   public int getRaftLogBufferSize() {
     return raftLogBufferSize;
   }
@@ -409,6 +464,14 @@ public class ClusterConfig {
 
   public void setMaxMemorySizeForRaftLog(long maxMemorySizeForRaftLog) {
     this.maxMemorySizeForRaftLog = maxMemorySizeForRaftLog;
+  }
+
+  public double getRaftLogMemoryProportion() {
+    return RaftLogMemoryProportion;
+  }
+
+  public void setRaftLogMemoryProportion(double raftLogMemoryProportion) {
+    RaftLogMemoryProportion = raftLogMemoryProportion;
   }
 
   public int getMaxRaftLogPersistDataSizePerFile() {
@@ -463,6 +526,14 @@ public class ClusterConfig {
     this.maxReadLogLag = maxReadLogLag;
   }
 
+  public long getMaxSyncLogLag() {
+    return maxSyncLogLag;
+  }
+
+  public void setMaxSyncLogLag(long maxSyncLogLag) {
+    this.maxSyncLogLag = maxSyncLogLag;
+  }
+
   public String getInternalIp() {
     return internalIp;
   }
@@ -485,5 +556,29 @@ public class ClusterConfig {
 
   public void setWaitClientTimeoutMS(long waitClientTimeoutMS) {
     this.waitClientTimeoutMS = waitClientTimeoutMS;
+  }
+
+  public long getHeartbeatIntervalMs() {
+    return heartbeatIntervalMs;
+  }
+
+  public void setHeartbeatIntervalMs(long heartbeatIntervalMs) {
+    this.heartbeatIntervalMs = heartbeatIntervalMs;
+  }
+
+  public long getElectionTimeoutMs() {
+    return electionTimeoutMs;
+  }
+
+  public void setElectionTimeoutMs(long electionTimeoutMs) {
+    this.electionTimeoutMs = electionTimeoutMs;
+  }
+
+  public int getClusterInfoRpcPort() {
+    return clusterInfoRpcPort;
+  }
+
+  public void setClusterInfoRpcPort(int clusterInfoRpcPort) {
+    this.clusterInfoRpcPort = clusterInfoRpcPort;
   }
 }

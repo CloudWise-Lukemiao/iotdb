@@ -138,7 +138,7 @@ object WideConverter extends Converter {
       requiredSchema.foreach(f => {
         if (!QueryConstant.RESERVED_TIME.equals(f.name)) {
           val path = new org.apache.iotdb.tsfile.read.common.Path(f.name, true)
-          if (devices.contains(path.getDevice) && measurementIds.contains(path.getMeasurement)) {
+          if (devices.contains(path.getDeviceIdString) && measurementIds.contains(path.getMeasurement)) {
             queriedSchema = queriedSchema.add(f)
           }
         }
@@ -422,7 +422,7 @@ object WideConverter extends Converter {
     * @param options encoding options
     * @return MeasurementSchema
     */
-  def getSeriesSchema(field: StructField, options: Map[String, String]): IMeasurementSchema = {
+  def getSeriesSchema(field: StructField, options: Map[String, String]): MeasurementSchema = {
     val dataType = getTsDataType(field.dataType)
     val encodingStr = dataType match {
       case TSDataType.BOOLEAN => options.getOrElse(QueryConstant.BOOLEAN, TSEncoding.PLAIN.toString)
@@ -473,7 +473,7 @@ object WideConverter extends Converter {
     }).foreach(f => {
       val name = f.name
       val fullPath = new Path(name, true)
-      val device = fullPath.getDevice
+      val device = fullPath.getDeviceIdString
       val measurement = fullPath.getMeasurement
 
       if (!deviceToRecord.contains(device)) {

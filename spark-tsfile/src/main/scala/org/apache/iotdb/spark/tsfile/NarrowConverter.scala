@@ -225,7 +225,7 @@ object NarrowConverter extends Converter {
       paths.add(new Path(path, true))
     })
 
-    val deviceName = paths.get(0).getDevice
+    val deviceName = paths.get(0).getDeviceIdString
     var finalFilter: IExpression = null
     if (timeFilter != null) {
       finalFilter = transformFilterToExpression(schema, timeFilter, deviceName)
@@ -527,7 +527,7 @@ object NarrowConverter extends Converter {
     * @param options encoding options
     * @return MeasurementSchema
     */
-  def getSeriesSchema(field: StructField, options: Map[String, String]): IMeasurementSchema = {
+  def getSeriesSchema(field: StructField, options: Map[String, String]): MeasurementSchema = {
     val dataType = getTsDataType(field.dataType)
     val encodingStr = dataType match {
       case TSDataType.BOOLEAN => options.getOrElse(QueryConstant.BOOLEAN, TSEncoding.PLAIN.toString)

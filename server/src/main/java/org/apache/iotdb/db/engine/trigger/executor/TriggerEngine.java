@@ -23,7 +23,7 @@ import org.apache.iotdb.db.engine.trigger.service.TriggerRegistrationInformation
 import org.apache.iotdb.db.engine.trigger.service.TriggerRegistrationService;
 import org.apache.iotdb.db.exception.TriggerExecutionException;
 import org.apache.iotdb.db.exception.TriggerManagementException;
-import org.apache.iotdb.db.metadata.mnode.MeasurementMNode;
+import org.apache.iotdb.db.metadata.mnode.IMeasurementMNode;
 import org.apache.iotdb.db.qp.physical.crud.InsertRowPlan;
 import org.apache.iotdb.db.qp.physical.crud.InsertTabletPlan;
 import org.apache.iotdb.db.qp.physical.sys.DropTriggerPlan;
@@ -40,28 +40,34 @@ public class TriggerEngine {
 
   public static void fire(TriggerEvent event, InsertRowPlan insertRowPlan)
       throws TriggerExecutionException {
-    MeasurementMNode[] mNodes = insertRowPlan.getMeasurementMNodes();
+    if (TriggerRegistrationService.getInstance().executorSize() == 0) {
+      return;
+    }
+
+    IMeasurementMNode[] mNodes = insertRowPlan.getMeasurementMNodes();
     int size = mNodes.length;
 
     long timestamp = insertRowPlan.getTime();
     Object[] values = insertRowPlan.getValues();
 
     for (int i = 0; i < size; ++i) {
-      MeasurementMNode mNode = mNodes[i];
+      IMeasurementMNode mNode = mNodes[i];
       if (mNode == null) {
         continue;
       }
-      TriggerExecutor executor = mNode.getTriggerExecutor();
-      if (executor == null) {
-        continue;
+      for (TriggerExecutor executor : mNode.getUpperTriggerExecutorList()) {
+        executor.fireIfActivated(event, timestamp, values[i], mNode.getSchema().getType());
       }
-      executor.fireIfActivated(event, timestamp, values[i]);
     }
   }
 
   public static void fire(TriggerEvent event, InsertTabletPlan insertTabletPlan, int firePosition)
       throws TriggerExecutionException {
-    MeasurementMNode[] mNodes = insertTabletPlan.getMeasurementMNodes();
+    if (TriggerRegistrationService.getInstance().executorSize() == 0) {
+      return;
+    }
+
+    IMeasurementMNode[] mNodes = insertTabletPlan.getMeasurementMNodes();
     int size = mNodes.length;
 
     long[] timestamps = insertTabletPlan.getTimes();
@@ -72,19 +78,17 @@ public class TriggerEngine {
     }
 
     for (int i = 0; i < size; ++i) {
-      MeasurementMNode mNode = mNodes[i];
+      IMeasurementMNode mNode = mNodes[i];
       if (mNode == null) {
         continue;
       }
-      TriggerExecutor executor = mNode.getTriggerExecutor();
-      if (executor == null) {
-        continue;
+      for (TriggerExecutor executor : mNode.getUpperTriggerExecutorList()) {
+        executor.fireIfActivated(event, timestamps, columns[i], mNode.getSchema().getType());
       }
-      executor.fireIfActivated(event, timestamps, columns[i]);
     }
   }
 
-  public static void drop(MeasurementMNode measurementMNode) {
+  public static void drop(IMeasurementMNode measurementMNode) {
     TriggerExecutor executor = measurementMNode.getTriggerExecutor();
     if (executor == null) {
       return;
@@ -104,8 +108,8 @@ public class TriggerEngine {
     }
   }
 
-  public static void drop(List<MeasurementMNode> measurementMNodes) {
-    for (MeasurementMNode measurementMNode : measurementMNodes) {
+  public static void drop(List<IMeasurementMNode> measurementMNodes) {
+    for (IMeasurementMNode measurementMNode : measurementMNodes) {
       drop(measurementMNode);
     }
   }

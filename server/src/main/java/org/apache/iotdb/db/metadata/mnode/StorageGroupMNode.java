@@ -18,49 +18,79 @@
  */
 package org.apache.iotdb.db.metadata.mnode;
 
+import org.apache.iotdb.confignode.rpc.thrift.TStorageGroupSchema;
 import org.apache.iotdb.db.metadata.logfile.MLogWriter;
 import org.apache.iotdb.db.qp.physical.sys.StorageGroupMNodePlan;
 
 import java.io.IOException;
 
-public class StorageGroupMNode extends MNode {
+public class StorageGroupMNode extends InternalMNode implements IStorageGroupMNode {
 
   private static final long serialVersionUID = 7999036474525817732L;
 
-  /**
-   * when the data file in a storage group is older than dataTTL, it is considered invalid and will
-   * be eventually deleted.
-   */
-  private long dataTTL;
+  private TStorageGroupSchema schema;
 
-  private int alignedTimeseriesIndex;
-
-  public StorageGroupMNode(MNode parent, String name, long dataTTL) {
+  public StorageGroupMNode(IMNode parent, String name) {
     super(parent, name);
-    this.dataTTL = dataTTL;
-    this.alignedTimeseriesIndex = 0;
   }
 
-  public StorageGroupMNode(MNode parent, String name, long dataTTL, int alignedTimeseriesIndex) {
+  // TODO: @yukun, remove this constructor
+  public StorageGroupMNode(IMNode parent, String name, long dataTTL) {
     super(parent, name);
-    this.dataTTL = dataTTL;
-    this.alignedTimeseriesIndex = alignedTimeseriesIndex;
+    this.schema = new TStorageGroupSchema(name).setTTL(dataTTL);
   }
 
+  @Override
+  public String getFullPath() {
+    if (fullPath == null) {
+      fullPath = concatFullPath().intern();
+    }
+    return fullPath;
+  }
+
+  @Override
   public long getDataTTL() {
-    return dataTTL;
+    return schema.getTTL();
   }
 
+  @Override
   public void setDataTTL(long dataTTL) {
-    this.dataTTL = dataTTL;
+    schema.setTTL(dataTTL);
   }
 
-  public int getAlignedTimeseriesIndex() {
-    return alignedTimeseriesIndex;
+  @Override
+  public void setSchemaReplicationFactor(int schemaReplicationFactor) {
+    schema.setSchemaReplicationFactor(schemaReplicationFactor);
   }
 
-  public void addAlignedTimeseriesIndex() {
-    this.alignedTimeseriesIndex++;
+  @Override
+  public void setDataReplicationFactor(int dataReplicationFactor) {
+    schema.setDataReplicationFactor(dataReplicationFactor);
+  }
+
+  @Override
+  public void setTimePartitionInterval(long timePartitionInterval) {
+    schema.setTimePartitionInterval(timePartitionInterval);
+  }
+
+  @Override
+  public void setStorageGroupSchema(TStorageGroupSchema schema) {
+    this.schema = schema;
+  }
+
+  @Override
+  public TStorageGroupSchema getStorageGroupSchema() {
+    return schema;
+  }
+
+  @Override
+  public void moveDataToNewMNode(IMNode newMNode) {
+    super.moveDataToNewMNode(newMNode);
+  }
+
+  @Override
+  public boolean isStorageGroup() {
+    return true;
   }
 
   @Override
@@ -71,15 +101,10 @@ public class StorageGroupMNode extends MNode {
   }
 
   public static StorageGroupMNode deserializeFrom(StorageGroupMNodePlan plan) {
-    return new StorageGroupMNode(
-        null, plan.getName(), plan.getDataTTL(), plan.getAlignedTimeseriesIndex());
+    return new StorageGroupMNode(null, plan.getName(), plan.getDataTTL());
   }
 
   public static StorageGroupMNode deserializeFrom(String[] nodeInfo) {
-    return new StorageGroupMNode(
-        null,
-        nodeInfo[1],
-        Long.parseLong(nodeInfo[2]),
-        nodeInfo.length == 4 ? Integer.parseInt(nodeInfo[3]) : 0);
+    return new StorageGroupMNode(null, nodeInfo[1], Long.parseLong(nodeInfo[2]));
   }
 }
