@@ -3,7 +3,7 @@ name: Grafana plugin build
 on:
   push:
     branches:
-      - grafana_test
+      - grafana_test_0613
       - "new_*"
   pull_request:
     branches:
