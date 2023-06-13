@@ -57,4 +57,4 @@ jobs:
         uses: magefile/mage-action@v1
         with:
           version: latest
-          args: -d ./grafana-plugin build
+          args: install -d ./grafana-plugin build
