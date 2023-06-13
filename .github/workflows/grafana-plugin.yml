@@ -59,16 +59,3 @@ jobs:
           version: latest
           args: buildAll
         run: cd ./grafana-plugin
-
-      - name: Sign grafana plugin
-        run: |
-          cd ./grafana-plugin
-#          npx @grafana/toolkit plugin:sign
-          yarn sign
-        env:
-          GRAFANA_API_KEY: ${{ secrets.GRAFANA_PLUGIN_TOKEN }}
-
-      - name: ls dir
-        run: |
-          cd ./grafana-plugin
-          ls
