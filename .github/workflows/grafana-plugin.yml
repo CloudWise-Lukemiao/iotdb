@@ -57,9 +57,4 @@ jobs:
         uses: magefile/mage-action@v1
         with:
           version: latest
-
-      - name: Build backend
-        run: |
-          cd ./grafana-plugin
-          mage -v
-          ls
+          args: -d ./grafana-plugin build
