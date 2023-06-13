@@ -3,11 +3,11 @@ name: Grafana plugin build
 on:
   push:
     branches:
-      - master
+      - grafana_test
       - "new_*"
   pull_request:
     branches:
-      - master
+      - grafana_test
       - "new_*"
 
 concurrency:
@@ -57,3 +57,12 @@ jobs:
         run: |
           cd ./grafana-plugin
           ./backend-compile.sh
+
+      - name: Sign grafana plugin
+        run: npx @grafana/toolkit plugin:sign
+        env:
+          GRAFANA_API_KEY: ${{ secrets.GRAFANA_PLUGIN_TOKEN }}
+
+      - name: ls dir
+        run: |
+          ls
