@@ -7,7 +7,7 @@ on:
       - "new_*"
   pull_request:
     branches:
-      - grafana_test
+      - grafana_test_0613
       - "new_*"
 
 concurrency:
