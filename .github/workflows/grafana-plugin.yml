@@ -59,10 +59,13 @@ jobs:
           ./backend-compile.sh
 
       - name: Sign grafana plugin
-        run: npx @grafana/toolkit plugin:sign
+        run: |
+          cd ./grafana-plugin
+          npx @grafana/toolkit plugin:sign
         env:
           GRAFANA_API_KEY: ${{ secrets.GRAFANA_PLUGIN_TOKEN }}
 
       - name: ls dir
         run: |
+          cd ./grafana-plugin
           ls
