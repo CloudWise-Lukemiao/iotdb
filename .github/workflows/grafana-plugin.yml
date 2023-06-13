@@ -53,15 +53,22 @@ jobs:
           yarn install --frozen-lockfile
           yarn build
 
-      - name: Install dependencies and Build backend
-        run: |
-          cd ./grafana-plugin
-          ./backend-compile.sh
+#      - name: Install dependencies and Build backend
+#        run: |
+#          cd ./grafana-plugin
+#          ./backend-compile.sh
+
+      - name: Build backend
+        uses: magefile/mage-action@v1
+        with:
+          version: latest
+          args: buildAll
 
       - name: Sign grafana plugin
         run: |
           cd ./grafana-plugin
-          npx @grafana/toolkit plugin:sign
+#          npx @grafana/toolkit plugin:sign
+          yarn sign
         env:
           GRAFANA_API_KEY: ${{ secrets.GRAFANA_PLUGIN_TOKEN }}
 
