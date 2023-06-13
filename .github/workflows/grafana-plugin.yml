@@ -54,12 +54,11 @@ jobs:
           yarn build
 
       - name: Build backend
-        run: |
-          cd ./grafana-plugin
-          uses: magefile/mage-action@v1
-          with:
-            version: latest
-            args: buildAll
+        uses: magefile/mage-action@v1
+        with:
+          version: latest
+          args: buildAll
+        run: cd ./grafana-plugin
 
       - name: Sign grafana plugin
         run: |
