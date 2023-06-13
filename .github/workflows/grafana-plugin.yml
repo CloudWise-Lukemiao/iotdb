@@ -53,10 +53,13 @@ jobs:
           yarn install --frozen-lockfile
           yarn build
 
+      - name: Install Build backend
+        uses: magefile/mage-action@v1
+        with:
+          version: latest
+
       - name: Build backend
         run: |
           cd ./grafana-plugin
-          uses: magefile/mage-action@v1
-          with:
-            version: latest
-            args: buildAll
+          mage -v
+          ls
