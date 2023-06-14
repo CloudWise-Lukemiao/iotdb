@@ -63,8 +63,15 @@ jobs:
         env:
           GRAFANA_API_KEY: ${{ secrets.GRAFANA_PLUGIN_TOKEN }}
 
+      - name: Package plugin
+        run: |
+          cd ./grafana-plugin
+          mv dist apache-iotdb-datasource
+          zip -r apache-iotdb-datasource.zip apache-iotdb-datasource
+          
+
       - name: Upload artifact
         uses: actions/upload-artifact@v2
         with:
           name: signed-plugin
-          path: ./grafana-plugin/dist/grafana-plugin-name-*.zip
+          path: ./grafana-plugin/apache-iotdb-datasource.zip
