@@ -62,3 +62,9 @@ jobs:
         run: npx @grafana/sign-plugin@latest --distDir ./grafana-plugin/dist --rootUrls https://example.com/grafana
         env:
           GRAFANA_API_KEY: ${{ secrets.GRAFANA_PLUGIN_TOKEN }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: signed-plugin
+          path: ./grafana-plugin/dist/grafana-plugin-name-*.zip
