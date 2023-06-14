@@ -59,6 +59,6 @@ jobs:
           ./backend-compile.sh
 
       - name: Sign grafana plugin
-        run: npx @grafana/sign-plugin@latest --distDir ./grafana-plugin --rootUrls https://example.com/grafana
+        run: npx @grafana/sign-plugin@latest --distDir ./grafana-plugin/dist --rootUrls https://example.com/grafana
         env:
           GRAFANA_API_KEY: ${{ secrets.GRAFANA_PLUGIN_TOKEN }}
