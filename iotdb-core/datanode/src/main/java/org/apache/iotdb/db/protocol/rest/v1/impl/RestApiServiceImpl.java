@@ -22,6 +22,7 @@ import org.apache.iotdb.db.conf.IoTDBDescriptor;
 import org.apache.iotdb.db.conf.rest.IoTDBRestServiceDescriptor;
 import org.apache.iotdb.db.protocol.rest.handler.AuthorizationHandler;
 import org.apache.iotdb.db.protocol.rest.utils.InsertTabletSortDataUtils;
+import org.apache.iotdb.db.protocol.rest.v1.NotFoundException;
 import org.apache.iotdb.db.protocol.rest.v1.RestApiService;
 import org.apache.iotdb.db.protocol.rest.v1.handler.ExceptionHandler;
 import org.apache.iotdb.db.protocol.rest.v1.handler.ExecuteStatementHandler;
@@ -74,7 +75,8 @@ public class RestApiServiceImpl extends RestApiService {
   }
 
   @Override
-  public Response executeNonQueryStatement(SQL sql, SecurityContext securityContext) {
+  public Response executeNonQueryStatement(SQL sql, SecurityContext securityContext)
+      throws NotFoundException {
     Long queryId = null;
     try {
       RequestValidationHandler.validateSQL(sql);
@@ -127,7 +129,8 @@ public class RestApiServiceImpl extends RestApiService {
   }
 
   @Override
-  public Response executeQueryStatement(SQL sql, SecurityContext securityContext) {
+  public Response executeQueryStatement(SQL sql, SecurityContext securityContext)
+      throws NotFoundException {
     Long queryId = null;
     try {
       RequestValidationHandler.validateSQL(sql);
@@ -187,7 +190,8 @@ public class RestApiServiceImpl extends RestApiService {
 
   @Override
   public Response insertTablet(
-      InsertTabletRequest insertTabletRequest, SecurityContext securityContext) {
+      InsertTabletRequest insertTabletRequest, SecurityContext securityContext)
+      throws NotFoundException {
     Long queryId = null;
     try {
       RequestValidationHandler.validateInsertTabletRequest(insertTabletRequest);

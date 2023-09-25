@@ -4,14 +4,14 @@ on:
   push:
     branches:
       - master
-      - 'rel/1.*'
+      - 'rel/1.2_grafana_test'
     paths-ignore:
       - 'docs/**'
       - 'site/**'
   pull_request:
     branches:
       - master
-      - "new_*"
+      - "rel/1.2_grafana_test"
     paths-ignore:
       - 'docs/**'
       - 'site/**'
