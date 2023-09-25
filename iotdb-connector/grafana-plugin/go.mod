@@ -19,5 +19,5 @@ go 1.20
 
 require (
 	github.com/grafana/grafana-plugin-sdk-go v0.176.0
-	github.com/magefile/mage v1.15.0 // indirect
+	github.com/magefile/mage v1.13.0 // indirect
 )
