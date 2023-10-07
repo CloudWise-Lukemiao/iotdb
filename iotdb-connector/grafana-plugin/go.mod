@@ -15,9 +15,8 @@
 
 module github.com/grafana/grafana-starter-datasource-backend
 
-go 1.16
+go 1.20
 
-require (
-	github.com/grafana/grafana-plugin-sdk-go v0.177.0
-	github.com/magefile/mage v1.15.0 // indirect
-)
+require github.com/grafana/grafana-plugin-sdk-go v0.179.0
+
+require github.com/magefile/mage v1.15.0 // indirect
