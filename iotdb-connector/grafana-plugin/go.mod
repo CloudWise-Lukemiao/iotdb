@@ -15,7 +15,7 @@
 
 module github.com/grafana/grafana-starter-datasource-backend
 
-go 1.20
+go 1.21.1
 
 require github.com/grafana/grafana-plugin-sdk-go v0.179.0
 
