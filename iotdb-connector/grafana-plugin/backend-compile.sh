@@ -24,7 +24,7 @@ if [ $exists_env -eq 0 ]; then
 fi
 work_path=$(pwd | sed 's/\"//g')
 echo $work_path
-go get -u github.com/grafana/grafana-plugin-sdk-go@v0.139.0
+go get -u github.com/grafana/grafana-plugin-sdk-go
 go mod tidy
 check_results=$(go env | grep GOPATH= | sed 's/\"//g')
 go_path=${check_results/GOPATH=/}
