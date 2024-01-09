@@ -36,8 +36,8 @@ passwd_param="root"
 host_param="127.0.0.1"
 port_param="6667"
 jdk_path_param=""
-data_dir_param="$IOTDB_HOME/data"
-
+data_dir_param="$IOTDB_HOME/data/datanode/data"
+echo $IOTDB_HOME
 while true; do
     case "$1" in
         -u)
@@ -82,6 +82,9 @@ zip_name="collection-$timestamp.zip"
 zip_directory="$IOTDB_HOME/"
 
 files_to_zip="${COLLECTION_FILE} $IOTDB_HOME/conf"
+
+rm -rf $IOTDB_HOME/collectioninfo
+mkdir -p $IOTDB_HOME/collectioninfo/logs
 
 {
     echo '====================== CPU Info ======================'
@@ -155,6 +158,15 @@ files_to_zip="${COLLECTION_FILE} $IOTDB_HOME/conf"
     fi
 } >> "$COLLECTION_FILE"
 
+{
+   for file in $IOTDB_HOME/logs/*.log; do
+       if [[ ! $file =~ \.log\.gz$ ]]; then
+           echo $file
+           cp "$file" "$IOTDB_HOME/collectioninfo/logs"
+       fi
+   done
+}
+
 convert_unit() {
     local size=$1
     local target_unit=$2
@@ -193,12 +205,7 @@ calculate_directory_size() {
     local total_size=0
     IFS=' ' read -ra dirs <<< "$data_dir_param"
     for dir in "${dirs[@]}"; do
-        iotdb_data_dir="$dir/datanode/data/$file_type"
-        if [ -n "$data_dir_param" ]; then
-              iotdb_data_dir="$dir/$file_type"
-        else
-              iotdb_data_dir="$dir/datanode/data/$file_type"
-        fi
+        iotdb_data_dir="$dir/$file_type"
         if [ -d "$iotdb_data_dir" ]; then
             local size=$(du -s "$iotdb_data_dir" | awk '{print $1}')
             total_size=$((total_size + size))
@@ -260,8 +267,7 @@ execute_command_and_append_to_file 'show databases'
 execute_command_and_append_to_file 'count devices'
 execute_command_and_append_to_file 'count timeseries'
 
-rm -rf $IOTDB_HOME/collectioninfo
-mkdir -p $IOTDB_HOME/collectioninfo
+
 mv $COLLECTION_FILE $IOTDB_HOME/collectioninfo
 cp -r $IOTDB_HOME/conf $IOTDB_HOME/collectioninfo
 zip -r "$IOTDB_HOME/$zip_name" $IOTDB_HOME/collectioninfo
