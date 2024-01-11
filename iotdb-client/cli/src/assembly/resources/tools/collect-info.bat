@@ -26,8 +26,9 @@ popd
 
 setlocal enabledelayedexpansion
 
-set "COLLECTION_DIR=%IOTDB_HOME%\collectioninfo"
-set "COLLECTION_DIR_LOGS=%IOTDB_HOME%\collectioninfo\logs"
+set "COLLECTION_DIR_NAME=iotdb-info"
+set "COLLECTION_DIR=%IOTDB_HOME%\%COLLECTION_DIR_NAME%"
+set "COLLECTION_DIR_LOGS=%COLLECTION_DIR%\logs"
 set "COLLECTION_FILE=%COLLECTION_DIR%\collection.txt"
 set "START_CLI_PATH=%IOTDB_HOME%\sbin\start-cli.bat"
 
@@ -37,7 +38,21 @@ set "passwd_param=root"
 set "host_param=127.0.0.1"
 set "port_param=6667"
 set "jdk_path_param="
-set "data_dir_param=%IOTDB_HOME%\data\datanode\data"
+
+set "properties_file=%IOTDB_HOME%\conf\iotdb-datanode.properties"
+set "key=dn_data_dirs"
+
+for /f "usebackq tokens=1,* delims==" %%a in ("%properties_file%") do (
+    if "%%a"=="%key%" (
+        set "value=%%b"
+    )
+)
+
+IF "%value%"=="" (
+    set "data_dir_param=%IOTDB_HOME%\data\datanode\data"
+) else (
+    set "data_dir_param=%value%"
+)
 
 :parse_args
 if "%~1"=="" goto done
@@ -92,18 +107,12 @@ echo data_dir_param: %data_dir_param%
 set "command=show version"
 
 call :collect_info
-call :execute_command "show version" >> "%COLLECTION_FILE%"
-call :execute_command "show cluster details" >> "%COLLECTION_FILE%"
-call :execute_command "show regions" >> "%COLLECTION_FILE%"
-call :execute_command "show databases" >> "%COLLECTION_FILE%"
-call :execute_command "count devices" >> "%COLLECTION_FILE%"
-call :execute_command "count timeseries" >> "%COLLECTION_FILE%"
 echo "Program execution completed, directory name is %COLLECTION_DIR%"
 exit /b
 
 :collect_info
 echo ---------------------
-echo Start Collection info
+echo Start collecting info
 echo ---------------------
 
 if exist "%COLLECTION_DIR%" rmdir /s /q "%COLLECTION_DIR%"
@@ -112,27 +121,22 @@ mkdir "%COLLECTION_DIR_LOGS%"
 
 xcopy /E /I /Q "%IOTDB_HOME%\conf" "%COLLECTION_DIR%\conf"
 
-set "files_to_zip=%COLLECTION_FILE% ../conf"
-
 call :collection_logs
 call :collect_system_info >> "%COLLECTION_FILE%"
 call :collect_jdk_version >> "%COLLECTION_FILE%"
 call :collect_activation_info >> "%COLLECTION_FILE%"
 call :total_file_num >> "%COLLECTION_FILE%"
+call :execute_command "show version" >> "%COLLECTION_FILE%" 2>&1
+call :execute_command "show cluster details" >> "%COLLECTION_FILE%" 2>&1
+call :execute_command "show regions" >> "%COLLECTION_FILE%" 2>&1
+call :execute_command "show databases" >> "%COLLECTION_FILE%" 2>&1
+call :execute_command "count devices" >> "%COLLECTION_FILE%" 2>&1
+call :execute_command "count timeseries" >> "%COLLECTION_FILE%" 2>&1
 
 exit /b
 
 :collect_system_info
 echo ===================== System Info =====================
-for /f  %%b in ('wmic ComputerSystem get TotalPhysicalMemory ^| findstr "[0-9]"') do (
-	set system_memory=%%b
-)
-echo wsh.echo FormatNumber(cdbl(%system_memory%)/(1024*1024), 0) > %IOTDB_HOME%\sbin\tmp.vbs
-for /f "tokens=*" %%a in ('cscript //nologo %IOTDB_HOME%\sbin\tmp.vbs') do set system_memory_in_mb=%%a
-del %IOTDB_HOME%\sbin\tmp.vbs
-set system_memory_in_mb=%system_memory_in_mb:,=%
-echo "%system_memory_in_mb%"
-
 systeminfo
 exit /b
 
@@ -188,25 +192,39 @@ echo '===================== TsFile Info====================='
 set "directories=%data_dir_param%"
 set "seqFileCount=0"
 set "unseqFileCount=0"
-set /a seqFileSize=0
-set /a unseqFileSize=0
+
+
+set /a totalSeqFileSize=0
+set /a totalUnseqFileSize=0
+
+set "directories=!directories:,= !"
+
 for %%d in ("%directories: =" "%") do (
     set "seqdirectory=%%~d\sequence"
     set "unseqdirectory=%%~d\unsequence"
-    for /f %%a in ('dir /s /b /a-d "!seqdirectory!\\*.tsfile" ^| find /c /v ""') do (
-        set /a "seqFileCount+=%%a"
+
+    if exist "!seqdirectory!\\*.tsfile" (
+        for /f %%a in ('dir /s /b /a-d "!seqdirectory!\\*.tsfile"  ^| find /c /v ""') do (
+            set /a "seqFileCount+=%%a"
+        )
     )
-    for /f %%a in ('dir /s /b /a-d "!unseqdirectory!\\*.tsfile" ^| find /c /v ""') do (
-        set /a "unseqFileCount+=%%a"
+    if exist "!unseqdirectory!\\*.tsfile" (
+        for /f %%a in ('dir /s /b /a-d "!unseqdirectory!\\*.tsfile" ^| find /c /v ""') do (
+            set /a "unseqFileCount+=%%a"
+        )
     )
+    set /a seqFileSize=0
+    set /a unseqFileSize=0
     call :processDirectory "!seqdirectory!" seqFileSize
     call :processDirectory "!unseqdirectory!" unseqFileSize
+    set /a "totalSeqFileSize+=!seqFileSize!"
+    set /a "totalUnseqFileSize+=!unseqFileSize!"
 )
 
 echo sequence(tsfile number): %seqFileCount%
 echo unsequence(tsfile number): %unseqFileCount%
-call :convertSize %seqFileSize% convertedSeqSize
-call :convertSize %unseqFileSize% convertedUnSeqSize
+call :convertSize %totalSeqFileSize% convertedSeqSize
+call :convertSize %totalUnseqFileSize% convertedUnSeqSize
 echo sequence(tsfile size): %convertedSeqSize%
 echo unsequence(tsfile size): %convertedUnSeqSize%
 exit /b
@@ -214,7 +232,6 @@ exit /b
 :processDirectory
 setlocal enabledelayedexpansion
 set "dir=%~1"
-echo %dir%
 set "sizeVar=%~2"
 
 echo Set objFSO = CreateObject("Scripting.FileSystemObject") > tmp.vbs
