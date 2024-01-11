@@ -231,12 +231,15 @@ mkdir -p $IOTDB_HOME/$COLLECTION_DIR/logs
 } >> "$COLLECTION_FILE"
 
 {
-   for file in $IOTDB_HOME/logs/*.log; do
-       if [[ ! $file =~ \.log\.gz$ ]]; then
-           echo $file
-           cp "$file" "$IOTDB_HOME/$COLLECTION_DIR/logs"
-       fi
-   done
+  if [[ -d "$IOTDB_HOME/logs/" ]]; then
+     for file in $IOTDB_HOME/logs/*.log; do
+         if [[ $file =~ \.log$ ]]; then
+             cp "$file" "$IOTDB_HOME/$COLLECTION_DIR/logs"
+         fi
+     done
+   else
+      echo "Directory $IOTDB_HOME/logs/ does not exist."
+   fi
 }
 
 calculate_directory_size() {
